@@ -1,0 +1,3 @@
+# Zig build and output files
+zig-cache
+zig-out
