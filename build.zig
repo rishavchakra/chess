@@ -10,10 +10,14 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const Path = std.Build.LazyPath;
+    const CSrcFile = std.Build.Step.Compile.CSourceFile;
     exe.linkSystemLibrary("glfw3");
     exe.linkSystemLibrary("GLEW");
-    exe.addIncludePath(std.Build.LazyPath{ .path = "libs/glad/include" });
-    exe.addCSourceFile(std.Build.Step.Compile.CSourceFile{ .file = std.Build.LazyPath{ .path = "libs/glad/src/glad.c" }, .flags = &[_][]const u8{"-std=c99"} });
+    exe.addIncludePath(Path{ .path = "libs/glad/include" });
+    exe.addCSourceFile(CSrcFile{ .file = Path{ .path = "libs/glad/src/glad.c" }, .flags = &[_][]const u8{"-std=c99"} });
+    exe.addIncludePath(Path{ .path = "libs/stb_image"});
+    exe.addCSourceFile(CSrcFile{ .file = Path{ .path = "libs/stb_image/stb_image_impl.c" }, .flags = &[_][]const u8{"-std=c99"} });
     exe.linkFramework("Cocoa");
     exe.linkFramework("OpenGL");
     exe.linkFramework("IOKit");
