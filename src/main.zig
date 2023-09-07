@@ -4,7 +4,8 @@ const gl = @cImport({
     // Disables GLFW's inclusion of GL libraries
     @cDefine("GLFW_INCLUDE_NONE", {});
     @cInclude("GLFW/glfw3.h");
-    @cInclude("GL/glew.h");
+    // @cInclude("GL/glew.h");
+    @cInclude("glad/glad.h");
 });
 
 const RenderError = error{

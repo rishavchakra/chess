@@ -12,6 +12,8 @@ pub fn build(b: *std.Build) void {
 
     exe.linkSystemLibrary("glfw3");
     exe.linkSystemLibrary("GLEW");
+    exe.addIncludePath(std.Build.LazyPath{ .path = "libs/glad/include" });
+    exe.addCSourceFile(std.Build.Step.Compile.CSourceFile{ .file = std.Build.LazyPath{ .path = "libs/glad/src/glad.c" }, .flags = &[_][]const u8{"-std=c99"} });
     exe.linkFramework("Cocoa");
     exe.linkFramework("OpenGL");
     exe.linkFramework("IOKit");
