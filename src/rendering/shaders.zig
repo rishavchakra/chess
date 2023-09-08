@@ -19,28 +19,33 @@ pub const board_frag_shader_src: [:0]const u8 =
 pub const piece_vert_shader_src: [:0]const u8 =
     \\#version 330 core
     \\layout (location = 0) in vec2 aPos;
-    \\layout (location = 1) in vec2 uv;
-    \\layout (location = 2) in float inPieceVal;
-    \\out vec2 vertUv;
+    \\layout (location = 1) in float inPieceVal;
+    \\out vec2 pos;
     \\out float vertPieceVal;
     \\void main()
     \\{
-    \\   gl_Position = vec4(aPos.x, aPos.y, 0.0f, 1.0f);
+    \\   gl_Position = vec4((aPos * 0.25f) - 1.0f, 0.0f, 1.0f);
     \\   vertPieceVal = inPieceVal;
-    \\   vertUv = uv;
+    \\   pos = aPos;
     \\}
 ;
 
 pub const piece_frag_shader_src: [:0]const u8 =
     \\#version 330 core
     \\in float vertPieceVal;
-    \\in vec2 vertUv;
+    \\in vec2 pos;
     \\out vec4 FragColor;
+    \\uniform sampler2D pieceTexture;
     \\void main()
     \\{
     // \\   FragColor = vec4(0.8f, 0.8f, 0.8f, 1.0f);
     \\   float val = vertPieceVal;
-    // \\   val = 1.0f;
-    \\   FragColor = vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    \\   vec2 calc_uv = mod(pos, vec2(1.0f, 1.0f));
+    \\   FragColor = texture(pieceTexture, calc_uv).rrrg;
+    // \\   FragColor = vec4(val, 0.0f, 0.0f, 1.0f);
+    // \\   FragColor = vec4(vertPieceVal / 12.0f, 0.0f, 0.0f, 1.0f);
+    // \\   FragColor = vec4(pos, 0.0f, 1.0f);
+    // \\   FragColor = vec4(uv, 0.0f, 1.0f);
+    // \\   FragColor = vec4(calc_uv, 0.0f, 1.0f);
     \\}
 ;

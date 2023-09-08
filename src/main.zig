@@ -27,8 +27,7 @@ pub fn main() !void {
     const piece_shader_program = try render.createShaderProgram(&[_]c_uint{ piece_vert_shader, piece_frag_shader });
     render.deleteShader(piece_vert_shader);
     render.deleteShader(piece_frag_shader);
-    // const texture = render.createTexture("assets/cburnett/p_white.png");
-    // _ = texture;
+    const texture = render.createTexture("assets/pieces-png/black-king.png");
 
     const board_bufs = render.createChessboard();
     const piece_bufs = render.createPieceBufs();
@@ -46,9 +45,10 @@ pub fn main() !void {
         gl.glUseProgram(board_shader_program);
         gl.glBindVertexArray(board_bufs.VAO);
         gl.glDrawElements(gl.GL_TRIANGLES, render.chessboard_inds_len, gl.GL_UNSIGNED_INT, null);
-        gl.glBindVertexArray(0);
+        // gl.glBindVertexArray(0);
 
         gl.glUseProgram(piece_shader_program);
+        gl.glBindTexture(gl.GL_TEXTURE_2D, texture);
         gl.glBindVertexArray(piece_bufs.VAO);
         // gl.glDrawArrays(gl.GL_TRIANGLES, 0, render.pieces_verts_len);
         gl.glDrawElements(gl.GL_TRIANGLES, render.pieces_inds_len, gl.GL_UNSIGNED_INT, null);

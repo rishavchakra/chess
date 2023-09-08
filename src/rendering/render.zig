@@ -41,6 +41,11 @@ pub fn windowInit() RenderError!*gl.struct_GLFWwindow {
         return RenderError.GLInitError;
     }
 
+    gl.glEnable(gl.GL_TEXTURE_2D);
+    gl.glEnable(gl.GL_BLEND);
+    gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA);
+    gl.glDisable(gl.GL_DEPTH_TEST);
+
     return window;
 }
 
@@ -113,7 +118,11 @@ pub fn createTexture(img_file: [*c]const u8) c_uint {
     var texture: c_uint = undefined;
     gl.glGenTextures(1, &texture);
     gl.glBindTexture(gl.GL_TEXTURE_2D, texture);
-    gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, img_w, img_h, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, img_data);
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE);
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE);
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR_MIPMAP_LINEAR);
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR);
+    gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RG, img_w, img_h, 0, gl.GL_RG, gl.GL_UNSIGNED_BYTE, img_data);
     gl.glGenerateMipmap(gl.GL_TEXTURE_2D);
     // Image data passed to GPU, can free from CPU memory
     img.stbi_image_free(img_data);
@@ -205,8 +214,8 @@ pub fn createChessboard() Buffers {
 
 // 32 pieces
 // 4 verts per piece
-// 5 components per piece (x, y, u, v, piece)
-pub const pieces_verts_len = 32 * 4 * 5;
+// 3 components per piece (x, y, piece)
+pub const pieces_verts_len = 32 * 4 * 3;
 // 32 pieces
 // 2 tris per piece
 // 3 inds per tri
@@ -239,6 +248,7 @@ pub fn createPieceBufs() Buffers {
     gl.glGenVertexArrays(1, &bufs.VAO);
     gl.glGenBuffers(1, &bufs.VBO);
     gl.glGenBuffers(1, &bufs.EBO);
+
     gl.glBindVertexArray(bufs.VAO);
 
     gl.glBindBuffer(gl.GL_ARRAY_BUFFER, bufs.VBO);
@@ -247,12 +257,12 @@ pub fn createPieceBufs() Buffers {
     gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, bufs.EBO);
     gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, pieces_inds_len * @sizeOf(u32), &indices, gl.GL_STATIC_DRAW);
 
-    gl.glVertexAttribPointer(0, 2, gl.GL_FLOAT, gl.GL_FALSE, 5 * @sizeOf(f32), null);
-    gl.glVertexAttribPointer(1, 2, gl.GL_FLOAT, gl.GL_FALSE, 5 * @sizeOf(f32), null);
-    gl.glVertexAttribPointer(2, 1, gl.GL_FLOAT, gl.GL_FALSE, 5 * @sizeOf(f32), null);
+    gl.glVertexAttribPointer(0, 2, gl.GL_FLOAT, gl.GL_FALSE, 3 * @sizeOf(f32), null);
+    // gl.glVertexAttribPointer(1, 2, gl.GL_FLOAT, gl.GL_FALSE, 5 * @sizeOf(f32), null);
+    gl.glVertexAttribPointer(1, 1, gl.GL_FLOAT, gl.GL_FALSE, 3 * @sizeOf(f32), null);
     gl.glEnableVertexAttribArray(0);
     gl.glEnableVertexAttribArray(1);
-    gl.glEnableVertexAttribArray(2);
+    // gl.glEnableVertexAttribArray(2);
 
     gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0);
     gl.glBindVertexArray(0);
@@ -273,44 +283,47 @@ pub fn updatePieceBufs(piece_bufs: Buffers, board_data: board.Board) void {
 
         const x: f32 = @as(f32, @floatFromInt(i % 8));
         const y: f32 = @as(f32, @floatFromInt(i / 8));
+        // std.debug.print("{}, {}\n", .{i % 8, i / 8});
+        // const div: f32 = 0.25;
+        // _ = div;
         // 0  1
         // 2  3
         // Vert 0: Top left
-        vertices[piece_ind + 0] = -1.0 + (x * 0.25);
-        vertices[piece_ind + 1] = -0.75 + (y * 0.25);
-        vertices[piece_ind + 2] = 0.0;
-        vertices[piece_ind + 3] = 1.0;
+        vertices[piece_ind + 0] = x + 0;
+        vertices[piece_ind + 1] = y + 1;
+        // vertices[piece_ind + 2] = 0.0;
+        // vertices[piece_ind + 3] = 1.0;
 
         // Vert 1: Top right
-        vertices[piece_ind + 5] = -0.75 + (x * 0.25);
-        vertices[piece_ind + 6] = -0.75 + (y * 0.25);
-        vertices[piece_ind + 7] = 1.0;
-        vertices[piece_ind + 8] = 1.0;
+        vertices[piece_ind + 3] = x + 1;
+        vertices[piece_ind + 4] = y + 1;
+        // vertices[piece_ind + 7] = 1.0;
+        // vertices[piece_ind + 8] = 1.0;
 
         // Vert 2: Bottom left
-        vertices[piece_ind + 10] = -1.0 + (x * 0.25);
-        vertices[piece_ind + 11] = -1.0 + (y * 0.25);
-        vertices[piece_ind + 12] = 0.0;
-        vertices[piece_ind + 13] = 0.0;
+        vertices[piece_ind + 6] = x + 0;
+        vertices[piece_ind + 7] = y + 0;
+        // vertices[piece_ind + 12] = 0.0;
+        // vertices[piece_ind + 13] = 0.0;
 
         // Vert 3: Bottom right
-        vertices[piece_ind + 15] = -0.75 + (x * 0.25);
-        vertices[piece_ind + 16] = -1.0 + (y * 0.25);
-        vertices[piece_ind + 17] = 1.0;
-        vertices[piece_ind + 18] = 0.0;
+        vertices[piece_ind + 9] = x + 1;
+        vertices[piece_ind + 10] = y + 0;
+        // vertices[piece_ind + 17] = 1.0;
+        // vertices[piece_ind + 18] = 0.0;
 
         const type_val = @as(u32, @intFromEnum(PType.getPieceType(p)));
         const side_val = @as(u32, @intFromEnum(Side.getPieceSide(p)));
         const int_val = type_val + (6 * (side_val >> 3));
         const piece_val = @as(f32, @floatFromInt(int_val));
-        vertices[piece_ind + 4] = piece_val;
-        vertices[piece_ind + 9] = piece_val;
-        vertices[piece_ind + 14] = piece_val;
-        vertices[piece_ind + 19] = piece_val;
+        vertices[piece_ind + 2] = piece_val;
+        vertices[piece_ind + 5] = piece_val;
+        vertices[piece_ind + 8] = piece_val;
+        vertices[piece_ind + 11] = piece_val;
         // std.debug.print(
-        // "{}: {any}\t{any}\t{any}\t{any}\n", 
+        // "{}: {any}\t{any}\t{any}\t{any}\n",
         // .{type_val, vertices[piece_ind .. piece_ind + 2], vertices[piece_ind + 3 .. piece_ind + 5], vertices[piece_ind + 6 .. piece_ind + 8], vertices[piece_ind + 9 .. piece_ind + 11]});
-        piece_ind += 20;
+        piece_ind += 12;
     }
     // std.debug.print("{any}\n", .{vertices});
 
