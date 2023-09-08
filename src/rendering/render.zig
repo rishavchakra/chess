@@ -259,7 +259,8 @@ pub fn createPieceBufs() Buffers {
 
     gl.glVertexAttribPointer(0, 2, gl.GL_FLOAT, gl.GL_FALSE, 3 * @sizeOf(f32), null);
     // gl.glVertexAttribPointer(1, 2, gl.GL_FLOAT, gl.GL_FALSE, 5 * @sizeOf(f32), null);
-    gl.glVertexAttribPointer(1, 1, gl.GL_FLOAT, gl.GL_FALSE, 3 * @sizeOf(f32), null);
+    const offset: *anyopaque = @ptrFromInt(2 * @sizeOf(f32));
+    gl.glVertexAttribPointer(1, 1, gl.GL_FLOAT, gl.GL_FALSE, 3 * @sizeOf(f32), offset);
     gl.glEnableVertexAttribArray(0);
     gl.glEnableVertexAttribArray(1);
     // gl.glEnableVertexAttribArray(2);
