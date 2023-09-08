@@ -9,17 +9,16 @@ const render = @import("rendering/render.zig");
 const board = @import("board.zig");
 
 pub fn main() !void {
-    const window = try render.windowInit();
-    defer render.windowDeinit(window);
+    const window = try render.WindowState.init();
+    defer window.deinit();
 
     const game_board = board.boardFromFen(board.start_fen).?;
     const render_state = try render.RenderState.init();
 
-    while (render.windowIsRunning(window)) {
+    while (window.isRunning()) {
         render_state.updatePiecePositions(game_board);
         render_state.render();
 
-        gl.glfwSwapBuffers(window);
-        gl.glfwPollEvents();
+        window.draw();
     }
 }

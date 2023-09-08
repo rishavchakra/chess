@@ -130,42 +130,55 @@ pub const RenderState = struct {
     }
 };
 
-pub fn windowInit() RenderError!*gl.struct_GLFWwindow {
-    const glfw_init_res = gl.glfwInit();
-    if (glfw_init_res == 0) {
-        return RenderError.WindowInitError;
+pub const WindowState = struct {
+    const Self = @This();
+
+    window_handle: *gl.struct_GLFWwindow,
+
+    pub fn init() RenderError!Self {
+        const glfw_init_res = gl.glfwInit();
+        if (glfw_init_res == 0) {
+            return RenderError.WindowInitError;
+        }
+
+        gl.glfwWindowHint(gl.GLFW_CONTEXT_VERSION_MAJOR, 3);
+        gl.glfwWindowHint(gl.GLFW_CONTEXT_VERSION_MINOR, 3);
+        gl.glfwWindowHint(gl.GLFW_OPENGL_PROFILE, gl.GLFW_OPENGL_CORE_PROFILE);
+        gl.glfwWindowHint(gl.GLFW_OPENGL_FORWARD_COMPAT, gl.GL_TRUE);
+
+        const window = gl.glfwCreateWindow(800, 800, "Chess", null, null) orelse return RenderError.WindowCreationError;
+
+        gl.glfwMakeContextCurrent(window);
+
+        const glad_init_res = gl.gladLoadGLLoader(@ptrCast(&gl.glfwGetProcAddress));
+        if (glad_init_res == 0) {
+            return RenderError.GLInitError;
+        }
+
+        gl.glEnable(gl.GL_TEXTURE_2D);
+        gl.glEnable(gl.GL_BLEND);
+        gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA);
+        gl.glDisable(gl.GL_DEPTH_TEST);
+
+        return Self {
+            .window_handle = window,
+        };
     }
 
-    gl.glfwWindowHint(gl.GLFW_CONTEXT_VERSION_MAJOR, 3);
-    gl.glfwWindowHint(gl.GLFW_CONTEXT_VERSION_MINOR, 3);
-    gl.glfwWindowHint(gl.GLFW_OPENGL_PROFILE, gl.GLFW_OPENGL_CORE_PROFILE);
-    gl.glfwWindowHint(gl.GLFW_OPENGL_FORWARD_COMPAT, gl.GL_TRUE);
-
-    const window = gl.glfwCreateWindow(800, 800, "Chess", null, null) orelse return RenderError.WindowCreationError;
-
-    gl.glfwMakeContextCurrent(window);
-
-    const glad_init_res = gl.gladLoadGLLoader(@ptrCast(&gl.glfwGetProcAddress));
-    if (glad_init_res == 0) {
-        return RenderError.GLInitError;
+    pub fn deinit(self: *const Self) void {
+        gl.glfwTerminate();
+        gl.glfwDestroyWindow(self.window_handle);
     }
 
-    gl.glEnable(gl.GL_TEXTURE_2D);
-    gl.glEnable(gl.GL_BLEND);
-    gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA);
-    gl.glDisable(gl.GL_DEPTH_TEST);
+    pub fn isRunning(self: *const Self) bool {
+        return gl.glfwWindowShouldClose(self.window_handle) == 0;
+    }
 
-    return window;
-}
-
-pub fn windowDeinit(window: *gl.struct_GLFWwindow) void {
-    gl.glfwTerminate();
-    gl.glfwDestroyWindow(window);
-}
-
-pub fn windowIsRunning(window: *gl.struct_GLFWwindow) bool {
-    return gl.glfwWindowShouldClose(window) == 0;
-}
+    pub fn draw(self: *const Self) void {
+        gl.glfwSwapBuffers(self.window_handle);
+        gl.glfwPollEvents();
+    }
+};
 
 pub const ShaderType = enum {
     Vertex,
