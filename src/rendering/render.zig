@@ -9,6 +9,8 @@ const img = @cImport({
     @cInclude("stb_image.h");
 });
 const shaders = @import("shaders.zig");
+const board = @import("../board.zig");
+const piece = @import("../piece.zig");
 
 pub const RenderError = error{
     WindowInitError,
@@ -39,7 +41,7 @@ pub fn windowInit() RenderError!*gl.struct_GLFWwindow {
         return RenderError.GLInitError;
     }
 
-    return window.?;
+    return window;
 }
 
 pub fn windowDeinit(window: *gl.struct_GLFWwindow) void {
@@ -130,8 +132,8 @@ pub const Buffers = struct {
     }
 };
 // 9 * 9: (8 + 1) * (8 + 1) vertices on a single row
-// 3: verts per tri
-pub const chessboard_verts_len = 9 * 9 * 3;
+// 3: components per vert
+pub const chessboard_verts_len = 9 * 9 * 2;
 // 8 * 8: 64 squares
 // 3: verts per triangle
 // 2: tris needed to make a quad
@@ -145,10 +147,10 @@ pub fn createChessboard() Buffers {
         for (0..9) |i| {
             var x: f32 = -1.0;
             for (0..9) |j| {
-                const ind = (j + (9 * i)) * 3;
+                const ind = (j + (9 * i)) * 2;
                 vertices[ind + 0] = x;
                 vertices[ind + 1] = y;
-                vertices[ind + 2] = 0.0;
+                // vertices[ind + 2] = 0.0;
                 x += 0.25;
             }
             y += 0.25;
@@ -191,12 +193,129 @@ pub fn createChessboard() Buffers {
     gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, bufs.EBO);
     gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, indices.len * @sizeOf(u32), &indices, gl.GL_STATIC_DRAW);
 
-    gl.glVertexAttribPointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE, 3 * @sizeOf(f32), null);
+    gl.glVertexAttribPointer(0, 2, gl.GL_FLOAT, gl.GL_FALSE, 2 * @sizeOf(f32), null);
     gl.glEnableVertexAttribArray(0);
 
+    // Unbind all bound data
     gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0);
-
     gl.glBindVertexArray(0);
 
     return bufs;
+}
+
+// 32 pieces
+// 4 verts per piece
+// 5 components per piece (x, y, u, v, piece)
+pub const pieces_verts_len = 32 * 4 * 5;
+// 32 pieces
+// 2 tris per piece
+// 3 inds per tri
+pub const pieces_inds_len = 32 * 2 * 3;
+pub fn createPieceBufs() Buffers {
+
+    // var vertices: [pieces_verts_len]f32 = [_]f32{0.0} ** (pieces_verts_len);
+    var indices: [pieces_inds_len]u32 = [_]u32{0} ** (pieces_inds_len);
+    {
+        // 0  1
+        // 2  3
+        var i: u32 = 0;
+        while (i < 32) : (i += 1) {
+            const ind = i * 6;
+            const vert_ind = i * 4;
+            indices[ind + 0] = vert_ind + 0;
+            indices[ind + 1] = vert_ind + 2;
+            indices[ind + 2] = vert_ind + 1;
+            indices[ind + 3] = vert_ind + 1;
+            indices[ind + 4] = vert_ind + 2;
+            indices[ind + 5] = vert_ind + 3;
+        }
+        // std.debug.print("{any}\n", .{indices});
+    }
+    var bufs: Buffers = Buffers{
+        .VAO = undefined,
+        .VBO = undefined,
+        .EBO = undefined,
+    };
+    gl.glGenVertexArrays(1, &bufs.VAO);
+    gl.glGenBuffers(1, &bufs.VBO);
+    gl.glGenBuffers(1, &bufs.EBO);
+    gl.glBindVertexArray(bufs.VAO);
+
+    gl.glBindBuffer(gl.GL_ARRAY_BUFFER, bufs.VBO);
+    gl.glBufferData(gl.GL_ARRAY_BUFFER, pieces_verts_len * @sizeOf(f32), null, gl.GL_DYNAMIC_DRAW);
+
+    gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, bufs.EBO);
+    gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, pieces_inds_len * @sizeOf(u32), &indices, gl.GL_STATIC_DRAW);
+
+    gl.glVertexAttribPointer(0, 2, gl.GL_FLOAT, gl.GL_FALSE, 5 * @sizeOf(f32), null);
+    gl.glVertexAttribPointer(1, 2, gl.GL_FLOAT, gl.GL_FALSE, 5 * @sizeOf(f32), null);
+    gl.glVertexAttribPointer(2, 1, gl.GL_FLOAT, gl.GL_FALSE, 5 * @sizeOf(f32), null);
+    gl.glEnableVertexAttribArray(0);
+    gl.glEnableVertexAttribArray(1);
+    gl.glEnableVertexAttribArray(2);
+
+    gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0);
+    gl.glBindVertexArray(0);
+
+    return bufs;
+}
+
+pub fn updatePieceBufs(piece_bufs: Buffers, board_data: board.Board) void {
+    const PType = piece.PieceType;
+    const Side = piece.Side;
+    var vertices: [pieces_verts_len]f32 = [_]f32{0.0} ** (pieces_verts_len);
+
+    var piece_ind: usize = 0;
+    for (board_data.piece_arr, 0..) |p, i| {
+        if (PType.getPieceType(p) == PType.None) {
+            continue;
+        }
+
+        const x: f32 = @as(f32, @floatFromInt(i % 8));
+        const y: f32 = @as(f32, @floatFromInt(i / 8));
+        // 0  1
+        // 2  3
+        // Vert 0: Top left
+        vertices[piece_ind + 0] = -1.0 + (x * 0.25);
+        vertices[piece_ind + 1] = -0.75 + (y * 0.25);
+        vertices[piece_ind + 2] = 0.0;
+        vertices[piece_ind + 3] = 1.0;
+
+        // Vert 1: Top right
+        vertices[piece_ind + 5] = -0.75 + (x * 0.25);
+        vertices[piece_ind + 6] = -0.75 + (y * 0.25);
+        vertices[piece_ind + 7] = 1.0;
+        vertices[piece_ind + 8] = 1.0;
+
+        // Vert 2: Bottom left
+        vertices[piece_ind + 10] = -1.0 + (x * 0.25);
+        vertices[piece_ind + 11] = -1.0 + (y * 0.25);
+        vertices[piece_ind + 12] = 0.0;
+        vertices[piece_ind + 13] = 0.0;
+
+        // Vert 3: Bottom right
+        vertices[piece_ind + 15] = -0.75 + (x * 0.25);
+        vertices[piece_ind + 16] = -1.0 + (y * 0.25);
+        vertices[piece_ind + 17] = 1.0;
+        vertices[piece_ind + 18] = 0.0;
+
+        const type_val = @as(u32, @intFromEnum(PType.getPieceType(p)));
+        const side_val = @as(u32, @intFromEnum(Side.getPieceSide(p)));
+        const int_val = type_val + (6 * (side_val >> 3));
+        const piece_val = @as(f32, @floatFromInt(int_val));
+        vertices[piece_ind + 4] = piece_val;
+        vertices[piece_ind + 9] = piece_val;
+        vertices[piece_ind + 14] = piece_val;
+        vertices[piece_ind + 19] = piece_val;
+        // std.debug.print(
+        // "{}: {any}\t{any}\t{any}\t{any}\n", 
+        // .{type_val, vertices[piece_ind .. piece_ind + 2], vertices[piece_ind + 3 .. piece_ind + 5], vertices[piece_ind + 6 .. piece_ind + 8], vertices[piece_ind + 9 .. piece_ind + 11]});
+        piece_ind += 20;
+    }
+    // std.debug.print("{any}\n", .{vertices});
+
+    gl.glBindBuffer(gl.GL_ARRAY_BUFFER, piece_bufs.VBO);
+    gl.glBufferSubData(gl.GL_ARRAY_BUFFER, 0, vertices.len * @sizeOf(f32), &vertices);
+
+    gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0);
 }
