@@ -43,18 +43,18 @@ pub const RenderState = struct {
         deleteShader(piece_vert_shader);
         deleteShader(piece_frag_shader);
         const textures = [_]c_uint{
-            createTexture("assets/pieces-png/black-pawn.png"),
-            createTexture("assets/pieces-png/black-bishop.png"),
-            createTexture("assets/pieces-png/black-knight.png"),
-            createTexture("assets/pieces-png/black-rook.png"),
-            createTexture("assets/pieces-png/black-queen.png"),
-            createTexture("assets/pieces-png/black-king.png"),
-            createTexture("assets/pieces-png/white-pawn.png"),
-            createTexture("assets/pieces-png/white-bishop.png"),
-            createTexture("assets/pieces-png/white-knight.png"),
-            createTexture("assets/pieces-png/white-rook.png"),
-            createTexture("assets/pieces-png/white-queen.png"),
-            createTexture("assets/pieces-png/white-king.png"),
+            createTexture("assets/pieces/black-pawn.png"),
+            createTexture("assets/pieces/black-bishop.png"),
+            createTexture("assets/pieces/black-knight.png"),
+            createTexture("assets/pieces/black-rook.png"),
+            createTexture("assets/pieces/black-queen.png"),
+            createTexture("assets/pieces/black-king.png"),
+            createTexture("assets/pieces/white-pawn.png"),
+            createTexture("assets/pieces/white-bishop.png"),
+            createTexture("assets/pieces/white-knight.png"),
+            createTexture("assets/pieces/white-rook.png"),
+            createTexture("assets/pieces/white-queen.png"),
+            createTexture("assets/pieces/white-king.png"),
         };
 
         const board_bufs = createChessboard();
