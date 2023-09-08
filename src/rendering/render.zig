@@ -21,6 +21,115 @@ pub const RenderError = error{
     ShaderLinkError,
 };
 
+pub const RenderState = struct {
+    const Self = @This();
+
+    board_shader: c_uint,
+    piece_shader: c_uint,
+    board_bufs: Buffers,
+    piece_bufs: Buffers,
+    textures: [12]c_uint,
+
+    pub fn init() RenderError!Self {
+        const board_vert_shader = try createShader(ShaderType.Vertex, shaders.board_vert_shader_src);
+        const board_frag_shader = try createShader(ShaderType.Fragment, shaders.board_frag_shader_src);
+        const board_shader_program = try createShaderProgram(&[_]c_uint{ board_vert_shader, board_frag_shader });
+        deleteShader(board_vert_shader);
+        deleteShader(board_frag_shader);
+
+        const piece_vert_shader = try createShader(ShaderType.Vertex, shaders.piece_vert_shader_src);
+        const piece_frag_shader = try createShader(ShaderType.Fragment, shaders.piece_frag_shader_src);
+        const piece_shader_program = try createShaderProgram(&[_]c_uint{ piece_vert_shader, piece_frag_shader });
+        deleteShader(piece_vert_shader);
+        deleteShader(piece_frag_shader);
+        const textures = [_]c_uint{
+            createTexture("assets/pieces-png/black-pawn.png"),
+            createTexture("assets/pieces-png/black-bishop.png"),
+            createTexture("assets/pieces-png/black-knight.png"),
+            createTexture("assets/pieces-png/black-rook.png"),
+            createTexture("assets/pieces-png/black-queen.png"),
+            createTexture("assets/pieces-png/black-king.png"),
+            createTexture("assets/pieces-png/white-pawn.png"),
+            createTexture("assets/pieces-png/white-bishop.png"),
+            createTexture("assets/pieces-png/white-knight.png"),
+            createTexture("assets/pieces-png/white-rook.png"),
+            createTexture("assets/pieces-png/white-queen.png"),
+            createTexture("assets/pieces-png/white-king.png"),
+        };
+
+        const board_bufs = createChessboard();
+        const piece_bufs = createPieceBufs();
+
+        gl.glClearColor(0.35, 0.35, 0.35, 1.0);
+        gl.glUseProgram(piece_shader_program);
+        gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex0"), 0);
+        gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex1"), 1);
+        gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex2"), 2);
+        gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex3"), 3);
+        gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex4"), 4);
+        gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex5"), 5);
+        gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex6"), 6);
+        gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex7"), 7);
+        gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex8"), 8);
+        gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex9"), 9);
+        gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex10"), 10);
+        gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex11"), 11);
+
+        gl.glActiveTexture(gl.GL_TEXTURE0);
+        gl.glBindTexture(gl.GL_TEXTURE_2D, textures[0]);
+        gl.glActiveTexture(gl.GL_TEXTURE1);
+        gl.glBindTexture(gl.GL_TEXTURE_2D, textures[1]);
+        gl.glActiveTexture(gl.GL_TEXTURE2);
+        gl.glBindTexture(gl.GL_TEXTURE_2D, textures[2]);
+        gl.glActiveTexture(gl.GL_TEXTURE3);
+        gl.glBindTexture(gl.GL_TEXTURE_2D, textures[3]);
+        gl.glActiveTexture(gl.GL_TEXTURE4);
+        gl.glBindTexture(gl.GL_TEXTURE_2D, textures[4]);
+        gl.glActiveTexture(gl.GL_TEXTURE5);
+        gl.glBindTexture(gl.GL_TEXTURE_2D, textures[5]);
+        gl.glActiveTexture(gl.GL_TEXTURE6);
+        gl.glBindTexture(gl.GL_TEXTURE_2D, textures[6]);
+        gl.glActiveTexture(gl.GL_TEXTURE7);
+        gl.glBindTexture(gl.GL_TEXTURE_2D, textures[7]);
+        gl.glActiveTexture(gl.GL_TEXTURE8);
+        gl.glBindTexture(gl.GL_TEXTURE_2D, textures[8]);
+        gl.glActiveTexture(gl.GL_TEXTURE9);
+        gl.glBindTexture(gl.GL_TEXTURE_2D, textures[9]);
+        gl.glActiveTexture(gl.GL_TEXTURE10);
+        gl.glBindTexture(gl.GL_TEXTURE_2D, textures[10]);
+        gl.glActiveTexture(gl.GL_TEXTURE11);
+        gl.glBindTexture(gl.GL_TEXTURE_2D, textures[11]);
+
+        return Self{
+            .board_shader = board_shader_program,
+            .piece_shader = piece_shader_program,
+            .board_bufs = board_bufs,
+            .piece_bufs = piece_bufs,
+            .textures = textures,
+        };
+    }
+
+    pub fn render(self: Self) void {
+        gl.glClear(gl.GL_COLOR_BUFFER_BIT);
+
+        gl.glUseProgram(self.board_shader);
+        gl.glBindVertexArray(self.board_bufs.VAO);
+        gl.glDrawElements(gl.GL_TRIANGLES, chessboard_inds_len, gl.GL_UNSIGNED_INT, null);
+        // gl.glBindVertexArray(0);
+
+        gl.glUseProgram(self.piece_shader);
+
+        gl.glBindVertexArray(self.piece_bufs.VAO);
+        // gl.glDrawArrays(gl.GL_TRIANGLES, 0, pieces_verts_len);
+        gl.glDrawElements(gl.GL_TRIANGLES, pieces_inds_len, gl.GL_UNSIGNED_INT, null);
+        gl.glBindVertexArray(0);
+    }
+
+    pub fn updatePiecePositions(self: Self, game_board: board.Board) void {
+        updatePieceBufs(self.piece_bufs, game_board);
+    }
+};
+
 pub fn windowInit() RenderError!*gl.struct_GLFWwindow {
     const glfw_init_res = gl.glfwInit();
     if (glfw_init_res == 0) {
