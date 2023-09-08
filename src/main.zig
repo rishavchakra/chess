@@ -27,7 +27,20 @@ pub fn main() !void {
     const piece_shader_program = try render.createShaderProgram(&[_]c_uint{ piece_vert_shader, piece_frag_shader });
     render.deleteShader(piece_vert_shader);
     render.deleteShader(piece_frag_shader);
-    const texture = render.createTexture("assets/pieces-png/black-king.png");
+    const textures = [_]c_uint{
+        render.createTexture("assets/pieces-png/black-pawn.png"),
+        render.createTexture("assets/pieces-png/black-bishop.png"),
+        render.createTexture("assets/pieces-png/black-knight.png"),
+        render.createTexture("assets/pieces-png/black-rook.png"),
+        render.createTexture("assets/pieces-png/black-queen.png"),
+        render.createTexture("assets/pieces-png/black-king.png"),
+        render.createTexture("assets/pieces-png/white-pawn.png"),
+        render.createTexture("assets/pieces-png/white-bishop.png"),
+        render.createTexture("assets/pieces-png/white-knight.png"),
+        render.createTexture("assets/pieces-png/white-rook.png"),
+        render.createTexture("assets/pieces-png/white-queen.png"),
+        render.createTexture("assets/pieces-png/white-king.png"),
+    };
 
     const board_bufs = render.createChessboard();
     const piece_bufs = render.createPieceBufs();
@@ -37,6 +50,44 @@ pub fn main() !void {
     // std.debug.print("{any}\n", .{game_board.piece_arr});
 
     gl.glClearColor(0.35, 0.35, 0.35, 1.0);
+    gl.glUseProgram(piece_shader_program);
+    gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex0"), 0);
+    gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex1"), 1);
+    gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex2"), 2);
+    gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex3"), 3);
+    gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex4"), 4);
+    gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex5"), 5);
+    gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex6"), 6);
+    gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex7"), 7);
+    gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex8"), 8);
+    gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex9"), 9);
+    gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex10"), 10);
+    gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex11"), 11);
+
+    gl.glActiveTexture(gl.GL_TEXTURE0);
+    gl.glBindTexture(gl.GL_TEXTURE_2D, textures[0]);
+    gl.glActiveTexture(gl.GL_TEXTURE1);
+    gl.glBindTexture(gl.GL_TEXTURE_2D, textures[1]);
+    gl.glActiveTexture(gl.GL_TEXTURE2);
+    gl.glBindTexture(gl.GL_TEXTURE_2D, textures[2]);
+    gl.glActiveTexture(gl.GL_TEXTURE3);
+    gl.glBindTexture(gl.GL_TEXTURE_2D, textures[3]);
+    gl.glActiveTexture(gl.GL_TEXTURE4);
+    gl.glBindTexture(gl.GL_TEXTURE_2D, textures[4]);
+    gl.glActiveTexture(gl.GL_TEXTURE5);
+    gl.glBindTexture(gl.GL_TEXTURE_2D, textures[5]);
+    gl.glActiveTexture(gl.GL_TEXTURE6);
+    gl.glBindTexture(gl.GL_TEXTURE_2D, textures[6]);
+    gl.glActiveTexture(gl.GL_TEXTURE7);
+    gl.glBindTexture(gl.GL_TEXTURE_2D, textures[7]);
+    gl.glActiveTexture(gl.GL_TEXTURE8);
+    gl.glBindTexture(gl.GL_TEXTURE_2D, textures[8]);
+    gl.glActiveTexture(gl.GL_TEXTURE9);
+    gl.glBindTexture(gl.GL_TEXTURE_2D, textures[9]);
+    gl.glActiveTexture(gl.GL_TEXTURE10);
+    gl.glBindTexture(gl.GL_TEXTURE_2D, textures[10]);
+    gl.glActiveTexture(gl.GL_TEXTURE11);
+    gl.glBindTexture(gl.GL_TEXTURE_2D, textures[11]);
 
     while (render.windowIsRunning(window)) {
         // gl.glClearColor(0.11, 0.11, 0.14, 1.0);
@@ -48,7 +99,7 @@ pub fn main() !void {
         // gl.glBindVertexArray(0);
 
         gl.glUseProgram(piece_shader_program);
-        gl.glBindTexture(gl.GL_TEXTURE_2D, texture);
+
         gl.glBindVertexArray(piece_bufs.VAO);
         // gl.glDrawArrays(gl.GL_TRIANGLES, 0, render.pieces_verts_len);
         gl.glDrawElements(gl.GL_TRIANGLES, render.pieces_inds_len, gl.GL_UNSIGNED_INT, null);

@@ -19,29 +19,66 @@ pub const board_frag_shader_src: [:0]const u8 =
 pub const piece_vert_shader_src: [:0]const u8 =
     \\#version 330 core
     \\layout (location = 0) in vec2 aPos;
-    \\layout (location = 1) in float inPieceVal;
+    \\layout (location = 1) in float aPieceVal;
     \\out vec2 pos;
-    \\out float vertPieceVal;
+    \\out float pVal;
     \\void main()
     \\{
     \\   gl_Position = vec4((aPos * 0.25f) - 1.0f, 0.0f, 1.0f);
-    \\   vertPieceVal = inPieceVal;
+    \\   pVal = aPieceVal;
     \\   pos = aPos;
     \\}
 ;
 
 pub const piece_frag_shader_src: [:0]const u8 =
     \\#version 330 core
-    \\in float vertPieceVal;
+    \\in float pVal;
     \\in vec2 pos;
     \\out vec4 FragColor;
-    \\uniform sampler2D pieceTexture;
+    \\uniform sampler2D tex0;
+    \\uniform sampler2D tex1;
+    \\uniform sampler2D tex2;
+    \\uniform sampler2D tex3;
+    \\uniform sampler2D tex4;
+    \\uniform sampler2D tex5;
+    \\uniform sampler2D tex6;
+    \\uniform sampler2D tex7;
+    \\uniform sampler2D tex8;
+    \\uniform sampler2D tex9;
+    \\uniform sampler2D tex10;
+    \\uniform sampler2D tex11;
+    \\
     \\void main()
     \\{
     // \\   FragColor = vec4(0.8f, 0.8f, 0.8f, 1.0f);
-    \\   float val = vertPieceVal;
+    // \\   float val = pVal / 12.0f;
     \\   vec2 calc_uv = mod(pos, vec2(1.0f, 1.0f));
-    \\   FragColor = texture(pieceTexture, calc_uv).rrrg;
+    \\   if (pVal < 1.1f) {
+    \\   FragColor = texture(tex0, calc_uv).rrrg;
+    \\   } else if (pVal < 2.1f) {
+    \\   FragColor = texture(tex1, calc_uv).rrrg;
+    \\   } else if (pVal < 3.1f) {
+    \\   FragColor = texture(tex2, calc_uv).rrrg;
+    \\   } else if (pVal < 4.1f) {
+    \\   FragColor = texture(tex3, calc_uv).rrrg;
+    \\   } else if (pVal < 5.1f) {
+    \\   FragColor = texture(tex4, calc_uv).rrrg;
+    \\   } else if (pVal < 6.1f) {
+    \\   FragColor = texture(tex5, calc_uv).rrrg;
+    \\   } else if (pVal < 7.1f) {
+    \\   FragColor = texture(tex6, calc_uv).rrrg;
+    \\   } else if (pVal < 8.1f) {
+    \\   FragColor = texture(tex7, calc_uv).rrrg;
+    \\   } else if (pVal < 9.1f) {
+    \\   FragColor = texture(tex8, calc_uv).rrrg;
+    \\   } else if (pVal < 11.0f) {
+    \\   FragColor = texture(tex9, calc_uv).rrrg;
+    \\   } else if (pVal < 11.1f) {
+    \\   FragColor = texture(tex10, calc_uv).rrrg;
+    \\   } else if (pVal < 12.1f) {
+    \\   FragColor = texture(tex11, calc_uv).rrrg;
+    \\   };
+    // \\   FragColor = texture(pieceTexture, calc_uv).rrrg;
     // \\   FragColor = vec4(val, 0.0f, 0.0f, 1.0f);
     // \\   FragColor = vec4(vertPieceVal / 12.0f, 0.0f, 0.0f, 1.0f);
     // \\   FragColor = vec4(pos, 0.0f, 1.0f);

@@ -32,7 +32,7 @@ pub fn windowInit() RenderError!*gl.struct_GLFWwindow {
     gl.glfwWindowHint(gl.GLFW_OPENGL_PROFILE, gl.GLFW_OPENGL_CORE_PROFILE);
     gl.glfwWindowHint(gl.GLFW_OPENGL_FORWARD_COMPAT, gl.GL_TRUE);
 
-    const window = gl.glfwCreateWindow(512, 512, "Chess", null, null) orelse return RenderError.WindowCreationError;
+    const window = gl.glfwCreateWindow(800, 800, "Chess", null, null) orelse return RenderError.WindowCreationError;
 
     gl.glfwMakeContextCurrent(window);
 
@@ -258,12 +258,10 @@ pub fn createPieceBufs() Buffers {
     gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, pieces_inds_len * @sizeOf(u32), &indices, gl.GL_STATIC_DRAW);
 
     gl.glVertexAttribPointer(0, 2, gl.GL_FLOAT, gl.GL_FALSE, 3 * @sizeOf(f32), null);
-    // gl.glVertexAttribPointer(1, 2, gl.GL_FLOAT, gl.GL_FALSE, 5 * @sizeOf(f32), null);
     const offset: *anyopaque = @ptrFromInt(2 * @sizeOf(f32));
     gl.glVertexAttribPointer(1, 1, gl.GL_FLOAT, gl.GL_FALSE, 3 * @sizeOf(f32), offset);
     gl.glEnableVertexAttribArray(0);
     gl.glEnableVertexAttribArray(1);
-    // gl.glEnableVertexAttribArray(2);
 
     gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0);
     gl.glBindVertexArray(0);
@@ -285,33 +283,23 @@ pub fn updatePieceBufs(piece_bufs: Buffers, board_data: board.Board) void {
         const x: f32 = @as(f32, @floatFromInt(i % 8));
         const y: f32 = @as(f32, @floatFromInt(i / 8));
         // std.debug.print("{}, {}\n", .{i % 8, i / 8});
-        // const div: f32 = 0.25;
-        // _ = div;
         // 0  1
         // 2  3
         // Vert 0: Top left
         vertices[piece_ind + 0] = x + 0;
         vertices[piece_ind + 1] = y + 1;
-        // vertices[piece_ind + 2] = 0.0;
-        // vertices[piece_ind + 3] = 1.0;
 
         // Vert 1: Top right
         vertices[piece_ind + 3] = x + 1;
         vertices[piece_ind + 4] = y + 1;
-        // vertices[piece_ind + 7] = 1.0;
-        // vertices[piece_ind + 8] = 1.0;
 
         // Vert 2: Bottom left
         vertices[piece_ind + 6] = x + 0;
         vertices[piece_ind + 7] = y + 0;
-        // vertices[piece_ind + 12] = 0.0;
-        // vertices[piece_ind + 13] = 0.0;
 
         // Vert 3: Bottom right
         vertices[piece_ind + 9] = x + 1;
         vertices[piece_ind + 10] = y + 0;
-        // vertices[piece_ind + 17] = 1.0;
-        // vertices[piece_ind + 18] = 0.0;
 
         const type_val = @as(u32, @intFromEnum(PType.getPieceType(p)));
         const side_val = @as(u32, @intFromEnum(Side.getPieceSide(p)));
@@ -321,6 +309,7 @@ pub fn updatePieceBufs(piece_bufs: Buffers, board_data: board.Board) void {
         vertices[piece_ind + 5] = piece_val;
         vertices[piece_ind + 8] = piece_val;
         vertices[piece_ind + 11] = piece_val;
+        // std.debug.print("Piece val: {}\n", .{piece_val});
         // std.debug.print(
         // "{}: {any}\t{any}\t{any}\t{any}\n",
         // .{type_val, vertices[piece_ind .. piece_ind + 2], vertices[piece_ind + 3 .. piece_ind + 5], vertices[piece_ind + 6 .. piece_ind + 8], vertices[piece_ind + 9 .. piece_ind + 11]});
