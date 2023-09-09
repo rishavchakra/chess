@@ -57,7 +57,7 @@ pub const RenderState = struct {
             createTexture("assets/pieces/white-king.png"),
         };
 
-        const board_bufs = createChessboard();
+        const board_bufs = createChessBoardSimple();
         const piece_bufs = createPieceBufs();
 
         gl.glClearColor(0.35, 0.35, 0.35, 1.0);
@@ -114,7 +114,7 @@ pub const RenderState = struct {
 
         gl.glUseProgram(self.board_shader);
         gl.glBindVertexArray(self.board_bufs.VAO);
-        gl.glDrawElements(gl.GL_TRIANGLES, chessboard_inds_len, gl.GL_UNSIGNED_INT, null);
+        gl.glDrawElements(gl.GL_TRIANGLES, 6, gl.GL_UNSIGNED_INT, null);
         // gl.glBindVertexArray(0);
 
         gl.glUseProgram(self.piece_shader);
@@ -160,7 +160,7 @@ pub const WindowState = struct {
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA);
         gl.glDisable(gl.GL_DEPTH_TEST);
 
-        return Self {
+        return Self{
             .window_handle = window,
         };
     }
@@ -180,11 +180,11 @@ pub const WindowState = struct {
     }
 };
 
-pub const ShaderType = enum {
+const ShaderType = enum {
     Vertex,
     Fragment,
 };
-pub fn createShader(shader_type: ShaderType, shader_src: [:0]const u8) RenderError!c_uint {
+fn createShader(shader_type: ShaderType, shader_src: [:0]const u8) RenderError!c_uint {
     const shader = switch (shader_type) {
         ShaderType.Vertex => gl.glCreateShader(gl.GL_VERTEX_SHADER),
         ShaderType.Fragment => gl.glCreateShader(gl.GL_FRAGMENT_SHADER),
@@ -208,11 +208,11 @@ pub fn createShader(shader_type: ShaderType, shader_src: [:0]const u8) RenderErr
     return shader;
 }
 
-pub fn deleteShader(shader: c_uint) void {
+fn deleteShader(shader: c_uint) void {
     gl.glDeleteShader(shader);
 }
 
-pub fn createShaderProgram(shader_arr: []const c_uint) RenderError!c_uint {
+fn createShaderProgram(shader_arr: []const c_uint) RenderError!c_uint {
     const shader_program = gl.glCreateProgram();
     for (shader_arr) |shader| {
         gl.glAttachShader(shader_program, shader);
@@ -231,7 +231,7 @@ pub fn createShaderProgram(shader_arr: []const c_uint) RenderError!c_uint {
     return shader_program;
 }
 
-pub fn createTexture(img_file: [*c]const u8) c_uint {
+fn createTexture(img_file: [*c]const u8) c_uint {
     var img_w: c_int = undefined;
     var img_h: c_int = undefined;
     var img_channels: c_int = undefined;
@@ -251,65 +251,26 @@ pub fn createTexture(img_file: [*c]const u8) c_uint {
     return texture;
 }
 
-pub const Buffers = struct {
+const Buffers = struct {
     VAO: c_uint,
     VBO: c_uint,
     EBO: c_uint,
 
-    pub fn deleteBuffers(self: Buffers) void {
+    fn deleteBuffers(self: Buffers) void {
         gl.glDeleteVertexArrays(1, &self.VAO);
         gl.glDeleteBuffers(1, &self.VBO);
         gl.glDeleteBuffers(1, &self.EBO);
     }
 };
-// 9 * 9: (8 + 1) * (8 + 1) vertices on a single row
-// 3: components per vert
-pub const chessboard_verts_len = 9 * 9 * 2;
-// 8 * 8: 64 squares
-// 3: verts per triangle
-// 2: tris needed to make a quad
-pub const chessboard_inds_len = 8 * 8 * 3 * 2;
-pub fn createChessboard() Buffers {
-    var vertices: [chessboard_verts_len]f32 = [_]f32{0.0} ** (chessboard_verts_len);
-    // Currently allocates twice as much space as necessary (only half of squares filled in)
-    var indices: [chessboard_inds_len]u32 = [_]u32{0} ** (chessboard_inds_len);
-    {
-        var y: f32 = -1.0;
-        for (0..9) |i| {
-            var x: f32 = -1.0;
-            for (0..9) |j| {
-                const ind = (j + (9 * i)) * 2;
-                vertices[ind + 0] = x;
-                vertices[ind + 1] = y;
-                // vertices[ind + 2] = 0.0;
-                x += 0.25;
-            }
-            y += 0.25;
-        }
-    }
-    {
-        var x: u32 = 0;
-        var y: u32 = 0;
-        while (y < 8) : (y += 1) {
-            while (x < 8) : (x += 1) {
-                if ((x + y) % 2 == 0) {
-                    continue;
-                }
-                const vert_ind: u32 = x + (9 * y);
-                const ind = (x + (8 * y)) * 3 * 2;
-                indices[ind + 0] = vert_ind; // Bottom left point
-                indices[ind + 1] = vert_ind + 1; // Bottom right point
-                indices[ind + 2] = vert_ind + 9 + 1; // Top right point
-                // Next triangle
-                indices[ind + 3] = vert_ind + 9 + 1; // Top right point
-                indices[ind + 4] = vert_ind + 9; // Top left point
-                indices[ind + 5] = vert_ind; // Bottom left point
-            }
-            x = 0;
-        }
-    }
-
-    var bufs: Buffers = Buffers{
+fn createChessBoardSimple() Buffers {
+    var vertices: [8]f32 = [_]f32{
+        -1.0, 1.0,
+        1.0,  1.0,
+        -1.0, -1.0,
+        1.0,  -1.0,
+    };
+    var indices: [6]u32 = [_]u32{ 0, 2, 1, 1, 2, 3 };
+    var bufs = Buffers{
         .VAO = undefined,
         .VBO = undefined,
         .EBO = undefined,
@@ -337,12 +298,12 @@ pub fn createChessboard() Buffers {
 // 32 pieces
 // 4 verts per piece
 // 3 components per piece (x, y, piece)
-pub const pieces_verts_len = 32 * 4 * 3;
+const pieces_verts_len = 32 * 4 * 3;
 // 32 pieces
 // 2 tris per piece
 // 3 inds per tri
-pub const pieces_inds_len = 32 * 2 * 3;
-pub fn createPieceBufs() Buffers {
+const pieces_inds_len = 32 * 2 * 3;
+fn createPieceBufs() Buffers {
 
     // var vertices: [pieces_verts_len]f32 = [_]f32{0.0} ** (pieces_verts_len);
     var indices: [pieces_inds_len]u32 = [_]u32{0} ** (pieces_inds_len);
@@ -391,7 +352,7 @@ pub fn createPieceBufs() Buffers {
     return bufs;
 }
 
-pub fn updatePieceBufs(piece_bufs: Buffers, board_data: board.Board) void {
+fn updatePieceBufs(piece_bufs: Buffers, board_data: board.Board) void {
     const PType = piece.PieceType;
     const Side = piece.Side;
     var vertices: [pieces_verts_len]f32 = [_]f32{0.0} ** (pieces_verts_len);
