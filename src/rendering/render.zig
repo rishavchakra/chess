@@ -43,24 +43,24 @@ pub const RenderState = struct {
         deleteShader(piece_vert_shader);
         deleteShader(piece_frag_shader);
         const textures = [_]c_uint{
-            createTexture("assets/pieces/black-pawn.png"),
-            createTexture("assets/pieces/black-bishop.png"),
-            createTexture("assets/pieces/black-knight.png"),
-            createTexture("assets/pieces/black-rook.png"),
-            createTexture("assets/pieces/black-queen.png"),
-            createTexture("assets/pieces/black-king.png"),
             createTexture("assets/pieces/white-pawn.png"),
             createTexture("assets/pieces/white-bishop.png"),
             createTexture("assets/pieces/white-knight.png"),
             createTexture("assets/pieces/white-rook.png"),
             createTexture("assets/pieces/white-queen.png"),
             createTexture("assets/pieces/white-king.png"),
+            createTexture("assets/pieces/black-pawn.png"),
+            createTexture("assets/pieces/black-bishop.png"),
+            createTexture("assets/pieces/black-knight.png"),
+            createTexture("assets/pieces/black-rook.png"),
+            createTexture("assets/pieces/black-queen.png"),
+            createTexture("assets/pieces/black-king.png"),
         };
 
         const board_bufs = createChessBoardSimple();
         const piece_bufs = createPieceBufs();
 
-        gl.glClearColor(0.35, 0.35, 0.35, 1.0);
+        gl.glClearColor(0.46, 0.59, 0.34, 1.0);
         gl.glUseProgram(piece_shader_program);
         gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex0"), 0);
         gl.glUniform1i(gl.glGetUniformLocation(piece_shader_program, "tex1"), 1);
@@ -115,12 +115,10 @@ pub const RenderState = struct {
         gl.glUseProgram(self.board_shader);
         gl.glBindVertexArray(self.board_bufs.VAO);
         gl.glDrawElements(gl.GL_TRIANGLES, 6, gl.GL_UNSIGNED_INT, null);
-        // gl.glBindVertexArray(0);
 
         gl.glUseProgram(self.piece_shader);
 
         gl.glBindVertexArray(self.piece_bufs.VAO);
-        // gl.glDrawArrays(gl.GL_TRIANGLES, 0, pieces_verts_len);
         gl.glDrawElements(gl.GL_TRIANGLES, pieces_inds_len, gl.GL_UNSIGNED_INT, null);
         gl.glBindVertexArray(0);
     }
@@ -305,7 +303,6 @@ const pieces_verts_len = 32 * 4 * 3;
 const pieces_inds_len = 32 * 2 * 3;
 fn createPieceBufs() Buffers {
 
-    // var vertices: [pieces_verts_len]f32 = [_]f32{0.0} ** (pieces_verts_len);
     var indices: [pieces_inds_len]u32 = [_]u32{0} ** (pieces_inds_len);
     {
         // 0  1
@@ -354,7 +351,7 @@ fn createPieceBufs() Buffers {
 
 fn updatePieceBufs(piece_bufs: Buffers, board_data: board.Board) void {
     const PType = piece.PieceType;
-    const Side = piece.Side;
+    const Side = piece.PieceSide;
     var vertices: [pieces_verts_len]f32 = [_]f32{0.0} ** (pieces_verts_len);
 
     var piece_ind: usize = 0;
@@ -365,7 +362,7 @@ fn updatePieceBufs(piece_bufs: Buffers, board_data: board.Board) void {
 
         const x: f32 = @as(f32, @floatFromInt(i % 8));
         const y: f32 = @as(f32, @floatFromInt(i / 8));
-        // std.debug.print("{}, {}\n", .{i % 8, i / 8});
+        // std.debug.print("{d}, {d}\n", .{x, y});
         // 0  1
         // 2  3
         // Vert 0: Top left
@@ -392,7 +389,7 @@ fn updatePieceBufs(piece_bufs: Buffers, board_data: board.Board) void {
         vertices[piece_ind + 5] = piece_val;
         vertices[piece_ind + 8] = piece_val;
         vertices[piece_ind + 11] = piece_val;
-        // std.debug.print("Piece val: {}\n", .{piece_val});
+        // std.debug.print("Piece val: {d}\n", .{piece_val});
         // std.debug.print(
         // "{}: {any}\t{any}\t{any}\t{any}\n",
         // .{type_val, vertices[piece_ind .. piece_ind + 2], vertices[piece_ind + 3 .. piece_ind + 5], vertices[piece_ind + 6 .. piece_ind + 8], vertices[piece_ind + 9 .. piece_ind + 11]});
