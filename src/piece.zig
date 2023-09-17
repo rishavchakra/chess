@@ -23,19 +23,24 @@ pub const PieceType = enum(u8) {
     }
 };
 
-pub const Side = enum(u8) {
+// Combine with the Side enum in chess.zig
+pub const PieceSide = enum(u8) {
     White = 0b0000,
     Black = 0b1000,
 
-    pub fn getPieceSide(p: Piece) Side {
+    pub fn getPieceSide(p: Piece) PieceSide {
         return switch ((p >> 3) & 0b1) {
-            0 => Side.White,
-            1 => Side.Black,
+            0 => PieceSide.White,
+            1 => PieceSide.Black,
             else => unreachable,
         };
     }
 };
 
-pub fn pieceInit(pt: PieceType, side: Side) Piece {
+pub fn pieceInit(pt: PieceType, side: PieceSide) Piece {
     return @intFromEnum(pt) | @intFromEnum(side);
+}
+
+pub fn pieceNone() Piece {
+    return 0;
 }
