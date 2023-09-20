@@ -31,14 +31,14 @@ pub const RenderState = struct {
     textures: [12]c_uint,
 
     pub fn init() RenderError!Self {
-        const board_vert_shader = try createShader(ShaderType.Vertex, shaders.board_vert_shader_src);
-        const board_frag_shader = try createShader(ShaderType.Fragment, shaders.board_frag_shader_src);
+        const board_vert_shader = try createShader(ShaderType.Vertex, "board.vert");
+        const board_frag_shader = try createShader(ShaderType.Fragment, "board.frag");
         const board_shader_program = try createShaderProgram(&[_]c_uint{ board_vert_shader, board_frag_shader });
         deleteShader(board_vert_shader);
         deleteShader(board_frag_shader);
 
-        const piece_vert_shader = try createShader(ShaderType.Vertex, shaders.piece_vert_shader_src);
-        const piece_frag_shader = try createShader(ShaderType.Fragment, shaders.piece_frag_shader_src);
+        const piece_vert_shader = try createShader(ShaderType.Vertex, "piece.vert");
+        const piece_frag_shader = try createShader(ShaderType.Fragment, "piece.frag");
         const piece_shader_program = try createShaderProgram(&[_]c_uint{ piece_vert_shader, piece_frag_shader });
         deleteShader(piece_vert_shader);
         deleteShader(piece_frag_shader);
@@ -182,12 +182,13 @@ const ShaderType = enum {
     Vertex,
     Fragment,
 };
-fn createShader(shader_type: ShaderType, shader_src: [:0]const u8) RenderError!c_uint {
+fn createShader(shader_type: ShaderType, comptime shader_path: []const u8) RenderError!c_uint {
+    const shader_src_ptr: [*c]const u8 = @ptrCast(@embedFile(shader_path));
+
     const shader = switch (shader_type) {
         ShaderType.Vertex => gl.glCreateShader(gl.GL_VERTEX_SHADER),
         ShaderType.Fragment => gl.glCreateShader(gl.GL_FRAGMENT_SHADER),
     };
-    const shader_src_ptr: ?[*]const u8 = shader_src.ptr;
     gl.glShaderSource(shader, 1, &shader_src_ptr, null);
     gl.glCompileShader(shader);
 
