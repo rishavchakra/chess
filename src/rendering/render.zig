@@ -8,7 +8,6 @@ const gl = @cImport({
 const img = @cImport({
     @cInclude("stb_image.h");
 });
-const shaders = @import("shaders.zig");
 const board = @import("../board.zig");
 const piece = @import("../piece.zig");
 
@@ -26,8 +25,10 @@ pub const RenderState = struct {
 
     board_shader: c_uint,
     piece_shader: c_uint,
+    highlight_square_shader: c_uint,
     board_bufs: Buffers,
     piece_bufs: Buffers,
+    highlight_bufs: Buffers,
     textures: [12]c_uint,
 
     pub fn init() RenderError!Self {
@@ -36,6 +37,12 @@ pub const RenderState = struct {
         const board_shader_program = try createShaderProgram(&[_]c_uint{ board_vert_shader, board_frag_shader });
         deleteShader(board_vert_shader);
         deleteShader(board_frag_shader);
+
+        const highlight_square_vert_shader = try createShader(ShaderType.Vertex, "highlight_square.vert");
+        const highlight_square_frag_shader = try createShader(ShaderType.Fragment, "highlight_square.frag");
+        const highlight_square_shader_program = try createShaderProgram(&[_]c_uint{ highlight_square_vert_shader, highlight_square_frag_shader });
+        deleteShader(highlight_square_vert_shader);
+        deleteShader(highlight_square_frag_shader);
 
         const piece_vert_shader = try createShader(ShaderType.Vertex, "piece.vert");
         const piece_frag_shader = try createShader(ShaderType.Fragment, "piece.frag");
@@ -57,8 +64,9 @@ pub const RenderState = struct {
             createTexture("assets/pieces/black-king.png"),
         };
 
-        const board_bufs = createChessBoardSimple();
+        const board_bufs = createChessBoardBufs();
         const piece_bufs = createPieceBufs();
+        const highlight_bufs = createBitboardBufs();
 
         gl.glClearColor(0.46, 0.59, 0.34, 1.0);
         gl.glUseProgram(piece_shader_program);
@@ -103,8 +111,10 @@ pub const RenderState = struct {
         return Self{
             .board_shader = board_shader_program,
             .piece_shader = piece_shader_program,
+            .highlight_square_shader = highlight_square_shader_program,
             .board_bufs = board_bufs,
             .piece_bufs = piece_bufs,
+            .highlight_bufs = highlight_bufs,
             .textures = textures,
         };
     }
@@ -116,15 +126,23 @@ pub const RenderState = struct {
         gl.glBindVertexArray(self.board_bufs.VAO);
         gl.glDrawElements(gl.GL_TRIANGLES, 6, gl.GL_UNSIGNED_INT, null);
 
-        gl.glUseProgram(self.piece_shader);
+        gl.glUseProgram(self.highlight_square_shader);
+        gl.glBindVertexArray(self.highlight_bufs.VAO);
+        gl.glDrawElements(gl.GL_TRIANGLES, bitboard_inds_len, gl.GL_UNSIGNED_INT, null);
 
+        gl.glUseProgram(self.piece_shader);
         gl.glBindVertexArray(self.piece_bufs.VAO);
         gl.glDrawElements(gl.GL_TRIANGLES, pieces_inds_len, gl.GL_UNSIGNED_INT, null);
+
         gl.glBindVertexArray(0);
     }
 
     pub fn updatePiecePositions(self: Self, game_board: board.Board) void {
         updatePieceBufs(self.piece_bufs, game_board);
+    }
+
+    pub fn updateBitboardDisplay(self: Self, bitboard: u64) void {
+        updateBitboardBufs(self.highlight_bufs, bitboard);
     }
 };
 
@@ -261,7 +279,7 @@ const Buffers = struct {
         gl.glDeleteBuffers(1, &self.EBO);
     }
 };
-fn createChessBoardSimple() Buffers {
+fn createChessBoardBufs() Buffers {
     var vertices: [8]f32 = [_]f32{
         -1.0, 1.0,
         1.0,  1.0,
@@ -303,7 +321,6 @@ const pieces_verts_len = 32 * 4 * 3;
 // 3 inds per tri
 const pieces_inds_len = 32 * 2 * 3;
 fn createPieceBufs() Buffers {
-
     var indices: [pieces_inds_len]u32 = [_]u32{0} ** (pieces_inds_len);
     {
         // 0  1
@@ -399,6 +416,102 @@ fn updatePieceBufs(piece_bufs: Buffers, board_data: board.Board) void {
     // std.debug.print("{any}\n", .{vertices});
 
     gl.glBindBuffer(gl.GL_ARRAY_BUFFER, piece_bufs.VBO);
+    gl.glBufferSubData(gl.GL_ARRAY_BUFFER, 0, vertices.len * @sizeOf(f32), &vertices);
+
+    gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0);
+}
+
+// 64 possible squares
+// 4 verts per square
+// 2 components per piece (x, y)
+const bitboard_verts_len = 64 * 4 * 2;
+// 64 possible squares
+// 2 tris per square
+// 3 inds per tri
+const bitboard_inds_len = 64 * 2 * 3;
+fn createBitboardBufs() Buffers {
+    var indices: [bitboard_inds_len]u32 = [_]u32{0} ** (bitboard_inds_len);
+    {
+        // 0  1
+        // 2  3
+        var i: u32 = 0;
+        while (i < 32) : (i += 1) {
+            const ind = i * 6;
+            const vert_ind = i * 4;
+            indices[ind + 0] = vert_ind + 0;
+            indices[ind + 1] = vert_ind + 2;
+            indices[ind + 2] = vert_ind + 1;
+            indices[ind + 3] = vert_ind + 1;
+            indices[ind + 4] = vert_ind + 2;
+            indices[ind + 5] = vert_ind + 3;
+        }
+    }
+    var bufs: Buffers = Buffers{
+        .VAO = undefined,
+        .VBO = undefined,
+        .EBO = undefined,
+    };
+    gl.glGenVertexArrays(1, &bufs.VAO);
+    gl.glGenBuffers(1, &bufs.VBO);
+    gl.glGenBuffers(1, &bufs.EBO);
+
+    gl.glBindVertexArray(bufs.VAO);
+
+    gl.glBindBuffer(gl.GL_ARRAY_BUFFER, bufs.VBO);
+    gl.glBufferData(gl.GL_ARRAY_BUFFER, bitboard_verts_len * @sizeOf(f32), null, gl.GL_DYNAMIC_DRAW);
+
+    gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, bufs.EBO);
+    gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, bitboard_inds_len * @sizeOf(u32), &indices, gl.GL_STATIC_DRAW);
+
+    gl.glVertexAttribPointer(0, 2, gl.GL_FLOAT, gl.GL_FALSE, 2 * @sizeOf(f32), null);
+    gl.glEnableVertexAttribArray(0);
+
+    gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0);
+    gl.glBindVertexArray(0);
+
+    return bufs;
+}
+// TODO: replace u64 with Bitboard type
+fn updateBitboardBufs(highlight_bufs: Buffers, highlight_data: u64) void {
+    var vertices: [bitboard_verts_len]f32 = [_]f32{0.0} ** bitboard_verts_len;
+
+    var hl_shifter: u64 = highlight_data;
+    var square_ind: usize = 0;
+    square_iter: for (0..64) |i| {
+        if (hl_shifter & 0b1 == 0) {
+            // This position is not a possible move and
+            // not meant to be highlighted
+            hl_shifter >>= 1;
+            continue: square_iter;
+        }
+        // std.debug.print("hl square {}\n", .{i});
+
+        const x: f32 = @as(f32, @floatFromInt(i % 8));
+        const y: f32 = @as(f32, @floatFromInt(i / 8));
+
+        // 0  1
+        // 2  3
+        // Vert 0: Top left
+        vertices[square_ind + 0] = x + 0;
+        vertices[square_ind + 1] = y + 1;
+
+        // Vert 1: Top right
+        vertices[square_ind + 2] = x + 1;
+        vertices[square_ind + 3] = y + 1;
+
+        // Vert 2: Bottom left
+        vertices[square_ind + 4] = x + 0;
+        vertices[square_ind + 5] = y + 0;
+
+        // Vert 3: Bottom right
+        vertices[square_ind + 6] = x + 1;
+        vertices[square_ind + 7] = y + 0;
+
+        hl_shifter >>= 1;
+        square_ind += 8;
+    }
+
+    gl.glBindBuffer(gl.GL_ARRAY_BUFFER, highlight_bufs.VBO);
     gl.glBufferSubData(gl.GL_ARRAY_BUFFER, 0, vertices.len * @sizeOf(f32), &vertices);
 
     gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0);
