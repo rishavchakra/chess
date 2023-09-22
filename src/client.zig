@@ -8,32 +8,39 @@ const gl = @cImport({
 const render = @import("rendering/render.zig");
 const chess = @import("chess.zig");
 const board = @import("board.zig");
+const bitboard = @import("bitboard.zig");
 
 pub const ClientState = struct {
     const Self = @This();
 
+    allocator: std.mem.Allocator,
     mouse_is_down: bool,
     allow_mouse_click: bool,
     move_state: ClientMoveState,
     chess_game: *chess.ChessGame,
+    renderer: *const render.RenderState,
     pending_move_from: u8,
 
-    pub fn initWhite() Self {
+    pub fn initWhite(alloc: std.mem.Allocator) Self {
         return Self{
+            .allocator = alloc,
             .mouse_is_down = false,
             .allow_mouse_click = false,
             .move_state = ClientMoveState.WaitingMoveFrom,
             .chess_game = undefined,
+            .renderer = undefined,
             .pending_move_from = undefined,
         };
     }
 
-    pub fn initBlack() Self {
+    pub fn initBlack(alloc: std.mem.Allocator) Self {
         return Self{
+            .allocator = alloc,
             .mouse_is_down = false,
             .allow_mouse_click = false,
             .move_state = ClientMoveState.WaitingOppMove,
             .chess_game = undefined,
+            .renderer = undefined,
             .pending_move_from = undefined,
         };
     }
@@ -42,7 +49,11 @@ pub const ClientState = struct {
         self.chess_game = chess_game;
     }
 
-    pub fn getMouseInput(self: *Self, window: *const render.WindowState) void {
+    pub fn addRenderer(self: *Self, renderer: *const render.RenderState) void {
+        self.renderer = renderer;
+    }
+
+    pub fn getMouseInput(self: *Self, window: *const render.WindowState) !void {
         if (self.move_state == ClientMoveState.WaitingOppMove) {
             return;
         }
@@ -72,8 +83,14 @@ pub const ClientState = struct {
             switch (self.move_state) {
                 ClientMoveState.WaitingMoveFrom => {
                     if (self.chess_game.isValidPiece(click_board_ind)) {
-                        self.pending_move_from = click_board_ind;
                         self.move_state = ClientMoveState.WaitingMoveTo;
+                        self.pending_move_from = click_board_ind;
+
+                        // Find and render move list
+                        const move_list = (try self.chess_game.chessboard.getMovesAtInd(self.allocator, click_board_ind)).?;
+                        defer move_list.deinit();
+                        const moves_bitboard = bitboard.Bitboard.initFromMoveList(move_list);
+                        self.renderer.updateBitboardDisplay(moves_bitboard);
                     }
                 },
                 ClientMoveState.WaitingMoveTo => {
@@ -81,9 +98,16 @@ pub const ClientState = struct {
                     // Attempting to click on your own piece - should select this new piece
                     if (self.chess_game.isValidPiece(click_board_ind)) {
                         self.pending_move_from = click_board_ind;
+
+                        // Find and re-render move list
+                        const move_list = (try self.chess_game.chessboard.getMovesAtInd(self.allocator, click_board_ind)).?;
+                        defer move_list.deinit();
+                        const moves_bitboard = bitboard.Bitboard.initFromMoveList(move_list);
+                        self.renderer.updateBitboardDisplay(moves_bitboard);
                     } else {
-                        self.chess_game.makeMove(move);
                         self.move_state = ClientMoveState.WaitingOppMove;
+                        self.chess_game.makeMove(move);
+                        self.renderer.updateBitboardDisplay(bitboard.Bitboard.empty());
                     }
                 },
                 ClientMoveState.WaitingOppMove => {},

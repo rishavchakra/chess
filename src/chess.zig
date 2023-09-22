@@ -12,7 +12,7 @@ pub const ChessGame = struct {
 
     pub fn init() Self {
         return Self{
-            .chessboard = board.Board.initFromFen(board.test_fen).?,
+            .chessboard = board.Board.initFromFen(board.start_fen).?,
             .client_white = undefined,
             .client_black = undefined,
         };
@@ -59,10 +59,10 @@ pub fn moveFromPosInds(pos_from: u8, pos_to: u8) Move {
     // return (pos_from << 8) + pos_to;
 }
 
-pub fn movePosFrom(move: Move) u8 {
+pub fn movePosFrom(move: Move) u6 {
     return @truncate(move >> 8);
 }
 
-pub fn movePosTo(move: Move) u8 {
+pub fn movePosTo(move: Move) u6 {
     return @truncate(move);
 }
