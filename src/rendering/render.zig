@@ -10,6 +10,7 @@ const img = @cImport({
 });
 const board = @import("../board.zig");
 const piece = @import("../piece.zig");
+const bitboard = @import("../bitboard.zig");
 
 pub const RenderError = error{
     WindowInitError,
@@ -141,8 +142,8 @@ pub const RenderState = struct {
         updatePieceBufs(self.piece_bufs, game_board);
     }
 
-    pub fn updateBitboardDisplay(self: Self, bitboard: u64) void {
-        updateBitboardBufs(self.highlight_bufs, bitboard);
+    pub fn updateBitboardDisplay(self: Self, render_bitboard: bitboard.Bitboard) void {
+        updateBitboardBufs(self.highlight_bufs, render_bitboard);
     }
 };
 
@@ -472,17 +473,16 @@ fn createBitboardBufs() Buffers {
     return bufs;
 }
 // TODO: replace u64 with Bitboard type
-fn updateBitboardBufs(highlight_bufs: Buffers, highlight_data: u64) void {
+fn updateBitboardBufs(highlight_bufs: Buffers, highlight_data: bitboard.Bitboard) void {
     var vertices: [bitboard_verts_len]f32 = [_]f32{0.0} ** bitboard_verts_len;
 
-    var hl_shifter: u64 = highlight_data;
     var square_ind: usize = 0;
-    square_iter: for (0..64) |i| {
-        if (hl_shifter & 0b1 == 0) {
+    for (0..64) |i| {
+        // const top_bit = 0b1 << 63;
+        if (highlight_data.getBit(@truncate(i)) == 0) {
             // This position is not a possible move and
             // not meant to be highlighted
-            hl_shifter >>= 1;
-            continue: square_iter;
+            continue;
         }
         // std.debug.print("hl square {}\n", .{i});
 
@@ -507,7 +507,6 @@ fn updateBitboardBufs(highlight_bufs: Buffers, highlight_data: u64) void {
         vertices[square_ind + 6] = x + 1;
         vertices[square_ind + 7] = y + 0;
 
-        hl_shifter >>= 1;
         square_ind += 8;
     }
 
