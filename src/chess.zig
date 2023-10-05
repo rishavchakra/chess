@@ -1,68 +1,97 @@
-const std = @import("std");
-const piece = @import("piece.zig");
-const board = @import("board.zig");
-const client = @import("client.zig");
+pub const Side = enum { White, Black };
+pub const PosRankFile = struct {
+    rank: u3,
+    file: u3,
 
-pub const ChessGame = struct {
-    const Self = @This();
-
-    chessboard: board.Board,
-    client_white: *client.ClientState,
-    client_black: *client.ClientState,
-
-    pub fn init() Self {
-        return Self{
-            .chessboard = board.Board.initFromFen(board.start_fen).?,
-            .client_white = undefined,
-            .client_black = undefined,
+    pub fn init(rank: u3, file: u3) PosRankFile {
+        return PosRankFile{
+            .rank = rank,
+            .file = file,
         };
     }
 
-    pub fn addClients(self: *Self, client_white: *client.ClientState, client_black: *client.ClientState) void {
-        self.client_white = client_white;
-        self.client_black = client_black;
-    }
-
-    pub fn makeMove(self: *Self, move: Move) void {
-        self.chessboard.makeMove(move);
-        switch (self.chessboard.side) {
-            Side.White => {
-                self.client_white.allowToMove();
-            },
-            Side.Black => {
-                self.client_black.allowToMove();
-            },
-        }
-    }
-
-    pub fn isValidPiece(self: *const Self, ind: u8) bool {
-        const piece_selected = self.chessboard.piece_arr[ind];
-        if (piece.PieceType.getPieceType(piece_selected) == piece.PieceType.None) {
-            return false;
-        }
-        const piece_side = piece.PieceSide.getPieceSide(piece_selected);
-        // std.debug.print("Piece: {b}\tSide: {}\n", .{piece_selected, piece_side});
-        return (self.chessboard.side == Side.White and piece_side == piece.PieceSide.White) or (self.chessboard.side == Side.Black and piece_side == piece.PieceSide.Black);
+    pub fn toInd(self: PosRankFile) PosInd {
+        return PosInd{ .ind = (@as(u6, @intCast(self.rank))) + self.file };
     }
 };
+pub const PosInd = struct {
+    ind: u6,
 
-// Combine with the Side enum in piece.zig
-pub const Side = enum { White, Black };
+    pub fn init(ind: u6) PosInd {
+        return PosInd{
+            .ind = ind,
+        };
+    }
 
-// 64 possible positions => 6 bits
-// MSB, position from, position to, LSB
-// 2 + 2 bits for good measure (and alignment)
-pub const Move = u16;
+    pub fn toRankFile(self: PosInd) PosRankFile {
+        return PosRankFile{
+            .rank = @intCast(self.ind / 8),
+            .file = @intCast(self.ind % 8),
+        };
+    }
+};
+pub const Move = struct {
+    pos_from: PosInd,
+    pos_to: PosInd,
+    flags: u4,
 
-pub fn moveFromPosInds(pos_from: u8, pos_to: u8) Move {
-    return (@as(u16, @intCast(pos_from)) << 8) + pos_to;
-    // return (pos_from << 8) + pos_to;
-}
+    pub fn init(from: PosInd, to: PosInd) Move {
+        return Move{
+            .pos_from = from,
+            .pos_to = to,
+            .flags = 0,
+        };
+    }
+};
+pub const Piece = struct {
+    data: u4,
 
-pub fn movePosFrom(move: Move) u6 {
-    return @truncate(move >> 8);
-}
+    pub fn init(pt: PieceType, side: Side) Piece {
+        return @intFromEnum(pt) | (@intFromEnum(side) << 3);
+    }
 
-pub fn movePosTo(move: Move) u6 {
-    return @truncate(move);
-}
+    pub fn none() Piece {
+        return Piece{ .data = 0 };
+    }
+
+    pub fn getPieceType(self: Piece) PieceType {
+        switch (self & 0b111) {
+            0 => PieceType.None,
+            0b001 => PieceType.Pawn,
+            0b010 => PieceType.Bishop,
+            0b011 => PieceType.Knight,
+            0b100 => PieceType.Rook,
+            0b101 => PieceType.Queen,
+            0b110 => PieceType.King,
+            else => unreachable,
+        }
+    }
+
+    pub fn getPieceSide(self: Piece) Side {
+        switch (self.data >> 3) {
+            0 => .White,
+            1 => .Black,
+        }
+    }
+};
+pub const PieceType = enum {
+    None,
+    Pawn,
+    Bishop,
+    Knight,
+    Rook,
+    Queen,
+    King,
+
+    pub fn value(self: PieceType) u8 {
+        switch (self) {
+            .None => 0,
+            .Pawn => 1,
+            .Bishop => 3,
+            .Knight => 3,
+            .Rook => 5,
+            .Queen => 9,
+            .King => 10,
+        }
+    }
+};

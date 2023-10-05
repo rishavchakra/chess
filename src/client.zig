@@ -1,131 +1,120 @@
-const std = @import("std");
 const gl = @cImport({
     // Disables GLFW's inclusion of GL libraries
     @cDefine("GLFW_INCLUDE_NONE", {});
     @cInclude("GLFW/glfw3.h");
     @cInclude("glad/glad.h");
 });
+const std = @import("std");
 const render = @import("rendering/render.zig");
+const game = @import("game.zig");
 const chess = @import("chess.zig");
-const board = @import("board.zig");
-const bitboard = @import("bitboard.zig");
 
-pub const ClientState = struct {
+// pub const Client = union(enum) {
+//     player: GuiClient,
+//     // bot: bot_client.BotClient,
+// };
+
+pub const GuiClient = struct {
     const Self = @This();
 
-    allocator: std.mem.Allocator,
-    mouse_is_down: bool,
-    allow_mouse_click: bool,
-    move_state: ClientMoveState,
-    chess_game: *chess.ChessGame,
+    const ClientState = enum {
+        Idle,
+        PieceDragging,
+        PieceSelected,
+        WaitingForOpp,
+    };
+
+    client_state: ClientState,
     renderer: *const render.RenderState,
-    pending_move_from: u8,
+    window_state: *const render.WindowState,
+    chess_game: *game.Game,
+    side: chess.Side,
+    selected_piece_ind: chess.PosInd,
 
-    pub fn initWhite(alloc: std.mem.Allocator) Self {
+    pub fn init(renderer: *const render.RenderState, window: *const render.WindowState, side: chess.Side) Self {
         return Self{
-            .allocator = alloc,
-            .mouse_is_down = false,
-            .allow_mouse_click = false,
-            .move_state = ClientMoveState.WaitingMoveFrom,
+            .client_state = .WaitingForOpp,
+            .renderer = renderer,
+            .window_state = window,
             .chess_game = undefined,
-            .renderer = undefined,
-            .pending_move_from = undefined,
+            .side = side,
+            .selected_piece_ind = undefined,
         };
     }
 
-    pub fn initBlack(alloc: std.mem.Allocator) Self {
-        return Self{
-            .allocator = alloc,
-            .mouse_is_down = false,
-            .allow_mouse_click = false,
-            .move_state = ClientMoveState.WaitingOppMove,
-            .chess_game = undefined,
-            .renderer = undefined,
-            .pending_move_from = undefined,
-        };
-    }
-
-    pub fn addToGame(self: *Self, chess_game: *chess.ChessGame) void {
+    pub fn addToGame(self: *Self, chess_game: *game.Game) void {
         self.chess_game = chess_game;
     }
 
-    pub fn addRenderer(self: *Self, renderer: *const render.RenderState) void {
-        self.renderer = renderer;
+    pub fn requestMove(self: *Self) void {
+        self.client_state = .Idle;
     }
 
-    pub fn getMouseInput(self: *Self, window: *const render.WindowState) !void {
-        if (self.move_state == ClientMoveState.WaitingOppMove) {
-            return;
-        }
-        const click_state: c_int = gl.glfwGetMouseButton(window.window_handle, gl.GLFW_MOUSE_BUTTON_LEFT);
-        if (!self.mouse_is_down and click_state == gl.GLFW_PRESS) {
-            self.mouse_is_down = true;
-            var mousex: f64 = undefined;
-            var mousey: f64 = undefined;
-            gl.glfwGetCursorPos(window.window_handle, &mousex, &mousey);
-            // std.debug.print("Click: ({d}, {d})\n", .{ mousex, mousey });
+    pub fn tickUpdate(self: *Self) void {
+        const click_state: c_int = gl.glfwGetMouseButton(self.window_state.window_handle, gl.GLFW_MOUSE_BUTTON_LEFT);
 
-            var window_width: i32 = undefined;
-            var window_height: i32 = undefined;
-            gl.glfwGetWindowSize(window.window_handle, &window_width, &window_height);
+        const mouse_pos = self.getMouseRankFile();
+        const mouse_pos_ind = mouse_pos.toInd();
 
-            // For using squares that are actually square
-            _ = if (window_width < window_height) window_width else window_height;
-
-            const square_width: u32 = @as(u32, @intCast(window_width)) / 8;
-            const square_height: u32 = @as(u32, @intCast(window_height)) / 8;
-
-            const in_square_x: u8 = @truncate(@as(u32, @intFromFloat(mousex)) / square_width);
-            const in_square_y: u8 = @truncate(@as(u32, @intFromFloat(mousey)) / square_height);
-
-            const click_board_ind = board.indFromXY(in_square_x, in_square_y);
-            // std.debug.print("Square: ({}, {})\tInd: {}\n", .{ in_square_x, in_square_y, click_board_ind });
-            switch (self.move_state) {
-                ClientMoveState.WaitingMoveFrom => {
-                    if (self.chess_game.isValidPiece(click_board_ind)) {
-                        self.move_state = ClientMoveState.WaitingMoveTo;
-                        self.pending_move_from = click_board_ind;
-
-                        // Find and render move list
-                        const move_list = (try self.chess_game.chessboard.getMovesAtInd(self.allocator, click_board_ind)).?;
-                        defer move_list.deinit();
-                        const moves_bitboard = bitboard.Bitboard.initFromMoveList(move_list);
-                        self.renderer.updateBitboardDisplay(moves_bitboard);
+        switch (self.client_state) {
+            .Idle => {
+                if (click_state == gl.GLFW_PRESS) {
+                    //check if the clicked board item is the right side
+                    if (true) {
+                        self.selected_piece_ind = mouse_pos_ind;
+                        self.client_state = .PieceDragging;
+                        std.debug.print("idle->press\n", .{});
                     }
-                },
-                ClientMoveState.WaitingMoveTo => {
-                    const move = chess.moveFromPosInds(self.pending_move_from, click_board_ind);
-                    // Attempting to click on your own piece - should select this new piece
-                    if (self.chess_game.isValidPiece(click_board_ind)) {
-                        self.pending_move_from = click_board_ind;
-
-                        // Find and re-render move list
-                        const move_list = (try self.chess_game.chessboard.getMovesAtInd(self.allocator, click_board_ind)).?;
-                        defer move_list.deinit();
-                        const moves_bitboard = bitboard.Bitboard.initFromMoveList(move_list);
-                        self.renderer.updateBitboardDisplay(moves_bitboard);
+                }
+            },
+            .PieceDragging => {
+                if (click_state == gl.GLFW_RELEASE) {
+                    // dropped back on starting square
+                    if (self.selected_piece_ind.ind == mouse_pos_ind.ind) {
+                        self.client_state = .PieceSelected;
+                        std.debug.print("drag->in place\n", .{});
                     } else {
-                        self.move_state = ClientMoveState.WaitingOppMove;
-                        self.chess_game.makeMove(move);
-                        self.renderer.updateBitboardDisplay(bitboard.Bitboard.empty());
-                    }
-                },
-                ClientMoveState.WaitingOppMove => {},
-            }
-        } else if (click_state == gl.GLFW_RELEASE) {
-            self.mouse_is_down = false;
-            self.allow_mouse_click = true;
+                        // check if dragged to a valid move
+                        if (true) {
+                            // Make the move
+                            self.client_state = .WaitingForOpp;
+                            std.debug.print("drag->move\n", .{});
+                        }
+                    } // mouse position checking
+                } else { // mouse button pressed
+                    // no need to do anything here
+                } // mouse button pressed/unpressed
+            },
+            .PieceSelected => {
+                if (click_state == gl.GLFW_PRESS) {
+                    // Make the move
+                    self.client_state = .WaitingForOpp;
+                    std.debug.print("selected->move\n", .{});
+                }
+            },
+            .WaitingForOpp => {}
         }
     }
 
-    pub fn allowToMove(self: *Self) void {
-        self.move_state = ClientMoveState.WaitingMoveFrom;
-        self.allow_mouse_click = false;
-    }
-};
+    fn getMouseRankFile(self: *Self) chess.PosRankFile {
+        var mousex: f64 = undefined;
+        var mousey: f64 = undefined;
+        gl.glfwGetCursorPos(self.window_state.window_handle, &mousex, &mousey);
 
-const ClientMoveState = enum {
-    WaitingMoveFrom,
-    WaitingMoveTo,
-    WaitingOppMove,
+        // Prevent negative zero errors
+        mousex = @max(0.0, mousex);
+        mousey = @max(0.0, mousey);
+
+        var window_width: i32 = undefined;
+        var window_height: i32 = undefined;
+        gl.glfwGetWindowSize(self.window_state.window_handle, &window_width, &window_height);
+
+        const square_width: u32 = @as(u32, @intCast(window_width)) / 8;
+        const square_height: u32 = @as(u32, @intCast(window_height)) / 8;
+
+        const in_square_x: u3 = @truncate(@as(u32, @intFromFloat(mousex)) / square_width);
+        const in_square_y: u3 = @truncate(@as(u32, @intFromFloat(mousey)) / square_height);
+
+        return chess.PosRankFile.init(in_square_y, in_square_x);
+    }
 };
