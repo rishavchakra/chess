@@ -13,52 +13,166 @@ pub const Board = struct {
     // Stored in rank-major order
     piece_arr: [64]chess.Piece,
     side: chess.Side,
+    castle_white_king: bool,
+    castle_white_queen: bool,
+    castle_black_king: bool,
+    castle_black_queen: bool,
+    en_passant: ?chess.PosInd,
+    fifty_move: u8,
+    full_move: u8,
 
     pub fn initFromFen(fen: []const u8) ?Board {
+        const FenStage = enum {
+            Pieces,
+            Side,
+            Castling,
+            EnPassant,
+            Halfmove,
+            Fullmove,
+        };
+
         var piece_arr: [64]chess.Piece = [_]chess.Piece{chess.Piece.none()} ** 64;
+        var side: chess.Side = undefined;
+        var castle_white_king = false;
+        var castle_white_queen = false;
+        var castle_black_king = false;
+        var castle_black_queen = false;
+        var en_passant_rank: u3 = 0;
+        var en_passant_file: u3 = 0;
+        var en_passant: ?chess.PosInd = null;
+        var fifty_move_chars: [2]u8 = [2]u8{ 33, 33 };
+        var fifty_move_char_num: u8 = 0;
+        var fifty_move: u8 = 0;
+        var full_move_chars: [3]u8 = [3]u8{ 33, 33, 33 };
+        var full_move_char_num: u8 = 0;
+        var full_move: u8 = 0;
 
         var x: u8 = 0;
         var y: u8 = 0;
+        var stage: FenStage = .Pieces;
         for (fen) |fenchar| {
-            // std.debug.print("rank: {}\tfile: {}\t", .{rank, file});
-            // '/' skips to the next rank
-            if (fenchar == '/') {
-                x = 0;
-                y += 1;
-                // std.debug.print("Skipping to rank {} file {}\n", .{rank, file});
-                continue;
-            } else if (fenchar == ' ') {
-                // std.debug.print("Finishing FEN string\n", .{});
-                break;
-            }
-            // Number n => skip n spaces
-            if (fenchar > 47 and fenchar < 57) {
-                x += fenchar - 48;
-                continue;
-            }
+            switch (stage) {
+                .Pieces => { // '/' skips to the next rank
+                    if (fenchar == '/') {
+                        x = 0;
+                        y += 1;
+                        continue;
+                    } else if (fenchar == ' ') {
+                        stage = .Side;
+                        continue;
+                    }
+                    // Number n => skip n spaces
+                    if (fenchar > 47 and fenchar < 57) {
+                        x += fenchar - 48;
+                        continue;
+                    }
 
-            // const Side = piece.PieceSide;
-            // const Type = piece.PieceType;
-            const side: chess.Side = if (fenchar < 91) .White else .Black;
-            // converts all letters to uppercase
-            const piece_char = if (fenchar > 96) fenchar - 32 else fenchar;
-            const piece_type: chess.PieceType = switch (piece_char) {
-                'K' => .King,
-                'Q' => .Queen,
-                'R' => .Rook,
-                'N' => .Knight,
-                'B' => .Bishop,
-                'P' => .Pawn,
-                else => return null,
-            };
-            // std.debug.print("x: {}\ty: {}\tpiece: {c}\tind: {}\n", .{x, y, fenchar, indFromXY(x, y)});
-            piece_arr[indFromXY(x, y)] = chess.Piece.init(piece_type, side);
-            x += 1;
+                    // White if uppercase, Black if lowercase
+                    const char_side: chess.Side = if (fenchar < 91) .White else .Black;
+                    // converts all letters to uppercase
+                    const piece_char = if (fenchar > 96) fenchar - 32 else fenchar;
+                    const piece_type: chess.PieceType = switch (piece_char) {
+                        'K' => .King,
+                        'Q' => .Queen,
+                        'R' => .Rook,
+                        'N' => .Knight,
+                        'B' => .Bishop,
+                        'P' => .Pawn,
+                        else => unreachable,
+                    };
+                    piece_arr[indFromXY(x, y)] = chess.Piece.init(piece_type, char_side);
+                    x += 1;
+                },
+                .Side => {
+                    switch (fenchar) {
+                        'w' => side = .White,
+                        'b' => side = .Black,
+                        ' ' => stage = .Castling,
+                        else => unreachable,
+                    }
+                },
+                .Castling => {
+                    switch (fenchar) {
+                        '-' => {},
+                        'K' => castle_white_king = true,
+                        'Q' => castle_white_queen = true,
+                        'k' => castle_black_king = true,
+                        'q' => castle_black_queen = true,
+                        ' ' => stage = .EnPassant,
+                        else => unreachable,
+                    }
+                },
+                .EnPassant => {
+                    switch (fenchar) {
+                        'a'...'h' => {
+                            en_passant_file = @intCast(fenchar - 97);
+                        },
+                        '1'...'8' => {
+                            en_passant_file = @intCast(fenchar - 48);
+                        },
+                        '-' => {
+                            en_passant = null;
+                        },
+                        ' ' => {
+                            if (en_passant_rank != 0) {
+                                en_passant = chess.PosRankFile.init(en_passant_rank, en_passant_file).toInd();
+                            }
+                            stage = .Halfmove;
+                        },
+                        else => unreachable,
+                    }
+                },
+                .Halfmove => {
+                    switch (fenchar) {
+                        '0'...'9' => {
+                            if (fifty_move_chars[0] == '!') {
+                                fifty_move_chars[0] = fenchar;
+                                fifty_move_char_num = 1;
+                            } else {
+                                fifty_move_chars[1] = fenchar;
+                                fifty_move_char_num = 2;
+                            }
+                        },
+                        ' ' => {
+                            const fifty_move_chars_const: []const u8 = fifty_move_chars[0..fifty_move_char_num];
+                            fifty_move = std.fmt.parseUnsigned(u8, fifty_move_chars_const, 10) catch unreachable;
+                            stage = .Fullmove;
+                        },
+                        else => unreachable,
+                    }
+                },
+                .Fullmove => {
+                    switch (fenchar) {
+                        '0'...'9' => {
+                            if (full_move_chars[0] == '!') {
+                                full_move_chars[0] = fenchar;
+                                full_move_char_num = 1;
+                            } else if (full_move_chars[1] == '!') {
+                                full_move_chars[1] = fenchar;
+                                full_move_char_num = 2;
+                            } else {
+                                full_move_chars[2] = fenchar;
+                                full_move_char_num = 3;
+                            }
+                        },
+                        else => unreachable,
+                    }
+                },
+            }
         }
+        const full_move_chars_const: []const u8 = full_move_chars[0..full_move_char_num];
+        full_move = std.fmt.parseUnsigned(u8, full_move_chars_const, 10) catch unreachable;
 
         return Board{
             .piece_arr = piece_arr,
-            .side = chess.Side.White,
+            .side = side,
+            .castle_white_king = castle_white_king,
+            .castle_white_queen = castle_white_queen,
+            .castle_black_king = castle_black_king,
+            .castle_black_queen = castle_black_queen,
+            .en_passant = en_passant,
+            .fifty_move = fifty_move,
+            .full_move = full_move,
         };
     }
 
@@ -66,6 +180,8 @@ pub const Board = struct {
     /// null if the string is an invalid FEN string
     fn fenFromBoard(_: Board) []const u8 {}
 
+    // Move a piece from one square to another
+    // Unchecked - does not make sure the move is valid
     pub fn makeMove(self: *Self, move: chess.Move) void {
         const from = move.pos_from;
         const to = move.pos_to;
@@ -75,6 +191,7 @@ pub const Board = struct {
             .White => .Black,
             .Black => .White,
         };
+        self.full_move += 1;
     }
 
     // Get all possible moves for a piece at a given index
@@ -296,6 +413,19 @@ pub const Board = struct {
         _ = alloc;
         _ = self;
         return null;
+    }
+
+    pub fn getMoveAtPos(self: *const Self, alloc: Allocator, pos: u8) !?std.ArrayList(chess.Move) {
+        const getPieceSide = piece.PieceSide.getPieceSide;
+        const getPIeceType = piece.PieceType.getPieceType;
+
+        const sel_piece = self.piece_arr[pos];
+        const piece_side = getPieceSide(sel_piece);
+        _ = piece_side;
+        const piece_type = getPIeceType(sel_piece);
+        _ = piece_type;
+        var move_list = std.ArrayList(chess.Move).init(alloc);
+        _ = move_list;
     }
 };
 
