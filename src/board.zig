@@ -47,15 +47,14 @@ pub const Board = struct {
         var full_move_char_num: u8 = 0;
         var full_move: u8 = 0;
 
-        var x: u8 = 0;
-        var y: u8 = 0;
+        var pos: chess.PosRankFile = chess.PosRankFile.init(7, 0);
         var stage: FenStage = .Pieces;
         for (fen) |fenchar| {
             switch (stage) {
                 .Pieces => { // '/' skips to the next rank
                     if (fenchar == '/') {
-                        x = 0;
-                        y += 1;
+                        pos.rank -= 1;
+                        pos.file = 0;
                         continue;
                     } else if (fenchar == ' ') {
                         stage = .Side;
@@ -63,7 +62,7 @@ pub const Board = struct {
                     }
                     // Number n => skip n spaces
                     if (fenchar > 47 and fenchar < 57) {
-                        x += fenchar - 48;
+                        pos.file +%= @truncate(fenchar - 48);
                         continue;
                     }
 
@@ -80,8 +79,8 @@ pub const Board = struct {
                         'P' => .Pawn,
                         else => unreachable,
                     };
-                    piece_arr[indFromXY(x, y)] = chess.Piece.init(piece_type, char_side);
-                    x += 1;
+                    piece_arr[pos.toInd().ind] = chess.Piece.init(piece_type, char_side);
+                    pos.file +%= 1;
                 },
                 .Side => {
                     switch (fenchar) {
@@ -214,70 +213,70 @@ pub const Board = struct {
                 if (getPieceType(self.piece_arr[next_rank]) == .None) {
                     try move_list.append(chess.moveFromPosInds(ind, next_rank));
                     // Double move from first rank
-                    if (rankFromInd(ind) == first_rank and getPieceType(self.piece_arr[skip_rank]) == .None) {
+                    if (ind / 8 == first_rank and getPieceType(self.piece_arr[skip_rank]) == .None) {
                         try move_list.append(chess.moveFromPosInds(ind, skip_rank));
                     }
                 }
                 // Attacking diagonals
-                if (fileFromInd(ind) < 7) {
+                if (ind % 8 < 7) {
                     var atk_diag_right = if (piece_side == .White) ind + 9 else ind - 7;
-                    if (fileFromInd(ind) < 7 and getPieceType(self.piece_arr[atk_diag_right]) != .None and getPieceSide(self.piece_arr[atk_diag_right]) != piece_side) {
+                    if (ind % 8 < 7 and getPieceType(self.piece_arr[atk_diag_right]) != .None and getPieceSide(self.piece_arr[atk_diag_right]) != piece_side) {
                         try move_list.append(chess.moveFromPosInds(ind, atk_diag_right));
                     }
                 }
-                if (fileFromInd(ind) > 0) {
+                if (ind % 8  > 0) {
                     var atk_diag_left = if (piece_side == .White) ind + 7 else ind - 9;
                     if (getPieceType(self.piece_arr[atk_diag_left]) != .None and getPieceSide(self.piece_arr[atk_diag_left]) != piece_side)
                         try move_list.append(chess.moveFromPosInds(ind, atk_diag_left));
                 }
             },
             .Knight => {
-                if (rankFromInd(ind) > 1) {
-                    if (fileFromInd(ind) > 0 and (getPieceType(self.piece_arr[ind - 17]) == .None or getPieceSide(self.piece_arr[ind - 17]) != piece_side)) {
+                if (ind / 8  > 1) {
+                    if (ind % 8  > 0 and (getPieceType(self.piece_arr[ind - 17]) == .None or getPieceSide(self.piece_arr[ind - 17]) != piece_side)) {
                         // 2 down 1 left
                         try move_list.append(chess.moveFromPosInds(ind, ind - 17));
                     }
-                    if (fileFromInd(ind) < 7 and (getPieceType(self.piece_arr[ind - 15]) == .None or getPieceSide(self.piece_arr[ind - 15]) != piece_side)) {
+                    if (ind % 8 < 7 and (getPieceType(self.piece_arr[ind - 15]) == .None or getPieceSide(self.piece_arr[ind - 15]) != piece_side)) {
                         // 2 down 1 right
                         try move_list.append(chess.moveFromPosInds(ind, ind - 15));
                     }
                 }
-                if (rankFromInd(ind) < 6) {
-                    if (fileFromInd(ind) > 0 and (getPieceType(self.piece_arr[ind + 15]) == .None or getPieceSide(self.piece_arr[ind + 15]) != piece_side)) {
+                if (ind / 8 < 6) {
+                    if (ind % 8 > 0 and (getPieceType(self.piece_arr[ind + 15]) == .None or getPieceSide(self.piece_arr[ind + 15]) != piece_side)) {
                         // 2 up 1 left
                         try move_list.append(chess.moveFromPosInds(ind, ind + 15));
                     }
-                    if (fileFromInd(ind) < 7 and (getPieceType(self.piece_arr[ind + 17]) == .None or getPieceSide(self.piece_arr[ind + 17]) != piece_side)) {
+                    if (ind % 8 < 7 and (getPieceType(self.piece_arr[ind + 17]) == .None or getPieceSide(self.piece_arr[ind + 17]) != piece_side)) {
                         // 2 up 1 left
                         try move_list.append(chess.moveFromPosInds(ind, ind + 17));
                     }
                 }
-                if (rankFromInd(ind) > 0) {
-                    if (fileFromInd(ind) > 1 and (getPieceType(self.piece_arr[ind - 10]) == .None or getPieceSide(self.piece_arr[ind - 10]) != piece_side)) {
+                if (ind / 8 > 0) {
+                    if (ind % 8 > 1 and (getPieceType(self.piece_arr[ind - 10]) == .None or getPieceSide(self.piece_arr[ind - 10]) != piece_side)) {
                         // 2 left 1 down
                         try move_list.append(chess.moveFromPosInds(ind, ind - 10));
                     }
-                    if (fileFromInd(ind) < 6 and (getPieceType(self.piece_arr[ind - 6]) == .None or getPieceSide(self.piece_arr[ind - 6]) != piece_side)) {
+                    if (ind % 8 < 6 and (getPieceType(self.piece_arr[ind - 6]) == .None or getPieceSide(self.piece_arr[ind - 6]) != piece_side)) {
                         // 2 right 1 down
                         try move_list.append(chess.moveFromPosInds(ind, ind - 6));
                     }
                 }
-                if (rankFromInd(ind) < 7) {
-                    if (fileFromInd(ind) > 1 and (getPieceType(self.piece_arr[ind + 6]) == .None or getPieceSide(self.piece_arr[ind + 6]) != piece_side)) {
+                if (ind / 8 < 7) {
+                    if (ind % 8 > 1 and (getPieceType(self.piece_arr[ind + 6]) == .None or getPieceSide(self.piece_arr[ind + 6]) != piece_side)) {
                         // 2 left 1 up
                         try move_list.append(chess.moveFromPosInds(ind, ind + 6));
                     }
-                    if (fileFromInd(ind) < 6 and (getPieceType(self.piece_arr[ind + 10]) == .None or getPieceSide(self.piece_arr[ind + 10]) != piece_side)) {
+                    if (ind % 8 < 6 and (getPieceType(self.piece_arr[ind + 10]) == .None or getPieceSide(self.piece_arr[ind + 10]) != piece_side)) {
                         // 2 right 1 up
                         try move_list.append(chess.moveFromPosInds(ind, ind + 10));
                     }
                 }
             },
             .King => {
-                const down = rankFromInd(ind) > 0;
-                const up = rankFromInd(ind) < 7;
-                const left = fileFromInd(ind) > 0;
-                const right = fileFromInd(ind) < 7;
+                const down = ind / 8 > 0;
+                const up = ind / 8 < 7;
+                const left = ind % 8 > 0;
+                const right = ind % 8 < 7;
                 if (up and (getPieceType(self.piece_arr[ind + 8]) == .None or getPieceSide(self.piece_arr[ind + 8]) != piece_side)) {
                     try move_list.append(chess.moveFromPosInds(ind, ind + 8));
                 }
@@ -304,10 +303,10 @@ pub const Board = struct {
                 }
             },
             else => { // Sliding pieces
-                const from_file = fileFromInd(ind);
+                const from_file = ind % 8;
                 if (piece_type != .Rook) {
                     var trace_ind: u8 = ind + 7;
-                    while (trace_ind < 64 and fileFromInd(trace_ind) < from_file) : (trace_ind += 7) {
+                    while (trace_ind < 64 and trace_ind % 8 < from_file) : (trace_ind += 7) {
                         if (getPieceType(self.piece_arr[trace_ind]) != .None) {
                             if (getPieceSide(self.piece_arr[trace_ind]) != piece_side) {
                                 try move_list.append(chess.moveFromPosInds(ind, trace_ind));
@@ -318,7 +317,7 @@ pub const Board = struct {
                     }
                     // Up-right
                     trace_ind = ind + 9;
-                    while (trace_ind < 64 and fileFromInd(trace_ind) > from_file) : (trace_ind += 9) {
+                    while (trace_ind < 64 and trace_ind % 8 > from_file) : (trace_ind += 9) {
                         if (getPieceType(self.piece_arr[trace_ind]) != .None) {
                             if (getPieceSide(self.piece_arr[trace_ind]) != piece_side) {
                                 try move_list.append(chess.moveFromPosInds(ind, trace_ind));
@@ -331,7 +330,7 @@ pub const Board = struct {
                     // if the tracing index is close to the u8 max (above 64) then tracing is finished
                     // Down-right
                     trace_ind = ind -% 7;
-                    while (trace_ind < 64 and fileFromInd(trace_ind) > from_file) : (trace_ind -%= 7) {
+                    while (trace_ind < 64 and trace_ind % 8 > from_file) : (trace_ind -%= 7) {
                         if (getPieceType(self.piece_arr[trace_ind]) != .None) {
                             if (getPieceSide(self.piece_arr[trace_ind]) != piece_side) {
                                 try move_list.append(chess.moveFromPosInds(ind, trace_ind));
@@ -342,7 +341,7 @@ pub const Board = struct {
                     }
                     // Down-left
                     trace_ind = ind -% 9;
-                    while (trace_ind < 64 and fileFromInd(trace_ind) < from_file) : (trace_ind -%= 9) {
+                    while (trace_ind < 64 and trace_ind % 8 < from_file) : (trace_ind -%= 9) {
                         if (getPieceType(self.piece_arr[trace_ind]) != .None) {
                             if (getPieceSide(self.piece_arr[trace_ind]) != piece_side) {
                                 try move_list.append(chess.moveFromPosInds(ind, trace_ind));
@@ -367,7 +366,7 @@ pub const Board = struct {
                     }
                     // Right
                     trace_ind = ind + 1;
-                    while (fileFromInd(trace_ind) > from_file) : (trace_ind += 1) {
+                    while (trace_ind % 8 > from_file) : (trace_ind += 1) {
                         if (getPieceType(self.piece_arr[trace_ind]) != .None) {
                             if (getPieceSide(self.piece_arr[trace_ind]) != piece_side) {
                                 try move_list.append(chess.moveFromPosInds(ind, trace_ind));
@@ -391,7 +390,7 @@ pub const Board = struct {
                     }
                     // Left
                     trace_ind = ind -% 1;
-                    while (fileFromInd(trace_ind) < from_file) : (trace_ind -%= 1) {
+                    while (trace_ind % 8 < from_file) : (trace_ind -%= 1) {
                         if (getPieceType(self.piece_arr[trace_ind]) != .None) {
                             if (getPieceSide(self.piece_arr[trace_ind]) != piece_side) {
                                 try move_list.append(chess.moveFromPosInds(ind, trace_ind));
@@ -428,23 +427,3 @@ pub const Board = struct {
         _ = move_list;
     }
 };
-
-/// Index from Rank, File coordinates
-/// Counted from the bottom left
-pub fn indFromRankFile(rank: u8, file: u8) u8 {
-    return (rank * 8) + file;
-}
-
-/// Index from X, Y coordinates
-/// Counted from the top left
-pub fn indFromXY(x: u8, y: u8) u8 {
-    return ((7 - y) * 8) + x;
-}
-
-fn rankFromInd(ind: u8) u8 {
-    return ind / 8;
-}
-
-fn fileFromInd(ind: u8) u8 {
-    return ind % 8;
-}
