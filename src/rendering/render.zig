@@ -8,8 +8,8 @@ const gl = @cImport({
 const img = @cImport({
     @cInclude("stb_image.h");
 });
+const chess = @import("../chess.zig");
 const board = @import("../board.zig");
-const piece = @import("../piece.zig");
 const bitboard = @import("../bitboard.zig");
 
 pub const RenderError = error{
@@ -369,13 +369,15 @@ fn createPieceBufs() Buffers {
 }
 
 fn updatePieceBufs(piece_bufs: Buffers, board_data: board.Board) void {
-    const PType = piece.PieceType;
-    const Side = piece.PieceSide;
+    const PType = chess.PieceType;
+    _ = PType;
+    const Side = chess.Side;
+    _ = Side;
     var vertices: [pieces_verts_len]f32 = [_]f32{0.0} ** (pieces_verts_len);
 
     var piece_ind: usize = 0;
     for (board_data.piece_arr, 0..) |p, i| {
-        if (PType.getPieceType(p) == PType.None) {
+        if (p.getPieceType() == .None) {
             continue;
         }
 
@@ -400,9 +402,9 @@ fn updatePieceBufs(piece_bufs: Buffers, board_data: board.Board) void {
         vertices[piece_ind + 9] = x + 1;
         vertices[piece_ind + 10] = y + 0;
 
-        const type_val = @as(u32, @intFromEnum(PType.getPieceType(p)));
-        const side_val = @as(u32, @intFromEnum(Side.getPieceSide(p)));
-        const int_val = type_val + (6 * (side_val >> 3));
+        const type_val = @as(u32, @intFromEnum(p.getPieceType()));
+        const side_val = @as(u32, @intFromEnum(p.getPieceSide()));
+        const int_val = type_val + (6 * side_val);
         const piece_val = @as(f32, @floatFromInt(int_val));
         vertices[piece_ind + 2] = piece_val;
         vertices[piece_ind + 5] = piece_val;

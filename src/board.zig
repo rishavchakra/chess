@@ -11,11 +11,11 @@ pub const Board = struct {
     const Self = @This();
 
     // Stored in rank-major order
-    piece_arr: [64]piece.Piece,
+    piece_arr: [64]chess.Piece,
     side: chess.Side,
 
     pub fn initFromFen(fen: []const u8) ?Board {
-        var piece_arr: [64]piece.Piece = [_]piece.Piece{piece.pieceNone()} ** 64;
+        var piece_arr: [64]chess.Piece = [_]chess.Piece{chess.Piece.none()} ** 64;
 
         var x: u8 = 0;
         var y: u8 = 0;
@@ -31,27 +31,28 @@ pub const Board = struct {
                 // std.debug.print("Finishing FEN string\n", .{});
                 break;
             }
+            // Number n => skip n spaces
             if (fenchar > 47 and fenchar < 57) {
                 x += fenchar - 48;
                 continue;
             }
 
-            const Side = piece.PieceSide;
-            const Type = piece.PieceType;
-            const side: Side = if (fenchar < 91) Side.White else Side.Black;
+            // const Side = piece.PieceSide;
+            // const Type = piece.PieceType;
+            const side: chess.Side = if (fenchar < 91) .White else .Black;
             // converts all letters to uppercase
             const piece_char = if (fenchar > 96) fenchar - 32 else fenchar;
-            const piece_type: piece.PieceType = switch (piece_char) {
-                'K' => Type.King,
-                'Q' => Type.Queen,
-                'R' => Type.Rook,
-                'N' => Type.Knight,
-                'B' => Type.Bishop,
-                'P' => Type.Pawn,
+            const piece_type: chess.PieceType = switch (piece_char) {
+                'K' => .King,
+                'Q' => .Queen,
+                'R' => .Rook,
+                'N' => .Knight,
+                'B' => .Bishop,
+                'P' => .Pawn,
                 else => return null,
             };
             // std.debug.print("x: {}\ty: {}\tpiece: {c}\tind: {}\n", .{x, y, fenchar, indFromXY(x, y)});
-            piece_arr[indFromXY(x, y)] = piece.pieceInit(piece_type, side);
+            piece_arr[indFromXY(x, y)] = chess.Piece.init(piece_type, side);
             x += 1;
         }
 
@@ -66,21 +67,21 @@ pub const Board = struct {
     fn fenFromBoard(_: Board) []const u8 {}
 
     pub fn makeMove(self: *Self, move: chess.Move) void {
-        const from = chess.movePosFrom(move);
-        const to = chess.movePosTo(move);
-        self.piece_arr[to] = self.piece_arr[from];
-        self.piece_arr[from] = piece.pieceNone();
+        const from = move.pos_from;
+        const to = move.pos_to;
+        self.piece_arr[to.ind] = self.piece_arr[from.ind];
+        self.piece_arr[from.ind] = chess.Piece.none();
         self.side = switch (self.side) {
-            chess.Side.White => chess.Side.Black,
-            chess.Side.Black => chess.Side.White,
+            .White => .Black,
+            .Black => .White,
         };
     }
 
     // Get all possible moves for a piece at a given index
     // Currently only used GUI-clientside so doesn't have to be all that optimized
     pub fn getMovesAtInd(self: *const Self, alloc: Allocator, ind: u8) !?std.ArrayList(chess.Move) {
-        const getPieceSide = piece.PieceSide.getPieceSide;
-        const getPieceType = piece.PieceType.getPieceType;
+        const getPieceSide = chess.Piece.getPieceSide;
+        const getPieceType = chess.Piece.getPieceType;
 
         const sel_piece = self.piece_arr[ind];
         const piece_side = getPieceSide(sel_piece);
@@ -110,7 +111,7 @@ pub const Board = struct {
                 if (fileFromInd(ind) > 0) {
                     var atk_diag_left = if (piece_side == .White) ind + 7 else ind - 9;
                     if (getPieceType(self.piece_arr[atk_diag_left]) != .None and getPieceSide(self.piece_arr[atk_diag_left]) != piece_side)
-                    try move_list.append(chess.moveFromPosInds(ind, atk_diag_left));
+                        try move_list.append(chess.moveFromPosInds(ind, atk_diag_left));
                 }
             },
             .Knight => {
@@ -282,7 +283,6 @@ pub const Board = struct {
                         }
                         try move_list.append(chess.moveFromPosInds(ind, trace_ind));
                     }
-
                 }
             },
         }

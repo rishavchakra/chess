@@ -21,6 +21,7 @@ pub const GuiClient = struct {
         Idle,
         PieceDragging,
         PieceSelected,
+        PieceDestSelected,
         WaitingForOpp,
     };
 
@@ -63,7 +64,7 @@ pub const GuiClient = struct {
                     if (true) {
                         self.selected_piece_ind = mouse_pos_ind;
                         self.client_state = .PieceDragging;
-                        std.debug.print("idle->press\n", .{});
+                        // std.debug.print("idle->press\n", .{});
                     }
                 }
             },
@@ -72,24 +73,36 @@ pub const GuiClient = struct {
                     // dropped back on starting square
                     if (self.selected_piece_ind.ind == mouse_pos_ind.ind) {
                         self.client_state = .PieceSelected;
-                        std.debug.print("drag->in place\n", .{});
+                        // std.debug.print("drag->in place\n", .{});
                     } else {
                         // check if dragged to a valid move
-                        if (true) {
+                        const move = chess.Move.init(self.selected_piece_ind, mouse_pos_ind);
+                        if (self.chess_game.isValidMove(move)) {
                             // Make the move
+                            self.chess_game.makeMove(move);
                             self.client_state = .WaitingForOpp;
-                            std.debug.print("drag->move\n", .{});
-                        }
+                            // std.debug.print("drag->move\n", .{});
+                        } // Maybe: cancel move altogether if not a valid move
                     } // mouse position checking
-                } else { // mouse button pressed
-                    // no need to do anything here
-                } // mouse button pressed/unpressed
+                } // mouse button unpressed
             },
             .PieceSelected => {
                 if (click_state == gl.GLFW_PRESS) {
+                    self.client_state = .PieceDestSelected;
+                }
+            },
+            .PieceDestSelected => {
+                if (click_state == gl.GLFW_RELEASE) {
                     // Make the move
-                    self.client_state = .WaitingForOpp;
-                    std.debug.print("selected->move\n", .{});
+                    const move = chess.Move.init(self.selected_piece_ind, mouse_pos_ind);
+                    if (self.chess_game.isValidMove(move)) {
+                        self.chess_game.makeMove(move);
+                        self.client_state = .WaitingForOpp;
+                        // std.debug.print("selected->move\n", .{});
+                    } else {
+                        self.client_state = .Idle;
+                        // std.debug.print("selected->deselected\n", .{});
+                    }
                 }
             },
             .WaitingForOpp => {}
@@ -115,6 +128,6 @@ pub const GuiClient = struct {
         const in_square_x: u3 = @truncate(@as(u32, @intFromFloat(mousex)) / square_width);
         const in_square_y: u3 = @truncate(@as(u32, @intFromFloat(mousey)) / square_height);
 
-        return chess.PosRankFile.init(in_square_y, in_square_x);
+        return chess.PosRankFile.init(7 - in_square_y, in_square_x);
     }
 };

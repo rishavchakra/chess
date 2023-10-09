@@ -1,8 +1,10 @@
 const std = @import("std");
 const piece = @import("piece.zig");
 const board = @import("board.zig");
-const client = @import("player_client.zig");
-const clients = @import("clients.zig");
+// const client = @import("player_client.zig");
+const clients = @import("client.zig");
+const chess = @import("chess.zig");
+const render = @import("rendering/render.zig");
 
 pub const Game = struct {
     const Self = @This();
@@ -10,31 +12,48 @@ pub const Game = struct {
     chessboard: board.Board,
     client_white: *clients.GuiClient,
     client_black: *clients.GuiClient,
+    renderer: *const render.RenderState,
 
-    pub fn init() Self {
+    pub fn init(renderer: *const render.RenderState) Self {
         return Self{
             .chessboard = board.Board.initFromFen(board.start_fen).?,
             .client_white = undefined,
             .client_black = undefined,
+            .renderer = renderer,
         };
     }
 
-    pub fn addClients(self: *Self, client_white: *client.PlayerClient, client_black: *client.PlayerClient) void {
-        self.client_white = client_white;
-        self.client_black = client_black;
+    pub fn addClientWhite(self: *Self, client: *clients.GuiClient) void {
+        self.client_white = client;
+        client.addToGame(self);
     }
 
-    pub fn addClientWhite(self: *Self, new_client: *clients.GuiClient) void {
-        self.client_white = new_client;
-        new_client.addToGame(self);
+    pub fn addClientBlack(self: *Self, client: *clients.GuiClient) void {
+        self.client_black = client;
+        client.addToGame(self);
     }
 
-    pub fn addClientBlack(self: *Self, new_client: *clients.GuiClient) void {
-        self.client_white = new_client;
-        new_client.addToGame(self);
+    pub fn isValidMove(self: *const Self, move: chess.Move) bool {
+        _ = move;
+        _ = self;
+        return true;
     }
 
-    pub fn makeMove(self: *Self, move: Move) void {
+    pub fn makeMove(self: *Self, move: chess.Move) void {
+        std.debug.print("{any}\n", .{move});
+        self.chessboard.makeMove(move);
+        switch (self.chessboard.side) {
+            .White => {
+                self.client_white.requestMove();
+            },
+            .Black => {
+                self.client_black.requestMove();
+            }
+        }
+        self.renderer.updatePiecePositions(self.chessboard);
+    }
+
+    pub fn makeMoveOld(self: *Self, move: Move) void {
         self.chessboard.makeMove(move);
         switch (self.chessboard.side) {
             Side.White => {

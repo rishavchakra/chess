@@ -1,4 +1,4 @@
-pub const Side = enum { White, Black };
+pub const Side = enum(u1) { White, Black };
 pub const PosRankFile = struct {
     rank: u3,
     file: u3,
@@ -11,7 +11,7 @@ pub const PosRankFile = struct {
     }
 
     pub fn toInd(self: PosRankFile) PosInd {
-        return PosInd{ .ind = (@as(u6, @intCast(self.rank))) + self.file };
+        return PosInd{ .ind = (@as(u6, @intCast(self.rank)) * 8) + self.file };
     }
 };
 pub const PosInd = struct {
@@ -47,7 +47,12 @@ pub const Piece = struct {
     data: u4,
 
     pub fn init(pt: PieceType, side: Side) Piece {
-        return @intFromEnum(pt) | (@intFromEnum(side) << 3);
+        // return @intFromEnum(pt) | (@intFromEnum(side) << 3);
+        const type_val: u4 = @intFromEnum(pt);
+        const side_val: u4 = @intFromEnum(side);
+        return Piece {
+            .data = type_val | (side_val << 3)
+        };
     }
 
     pub fn none() Piece {
@@ -55,7 +60,7 @@ pub const Piece = struct {
     }
 
     pub fn getPieceType(self: Piece) PieceType {
-        switch (self & 0b111) {
+        return switch (self.data & 0b111) {
             0 => PieceType.None,
             0b001 => PieceType.Pawn,
             0b010 => PieceType.Bishop,
@@ -64,14 +69,15 @@ pub const Piece = struct {
             0b101 => PieceType.Queen,
             0b110 => PieceType.King,
             else => unreachable,
-        }
+        };
     }
 
     pub fn getPieceSide(self: Piece) Side {
-        switch (self.data >> 3) {
+        return switch (self.data >> 3) {
             0 => .White,
             1 => .Black,
-        }
+            else => unreachable,
+        };
     }
 };
 pub const PieceType = enum {
