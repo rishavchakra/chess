@@ -369,54 +369,60 @@ fn createPieceBufs() Buffers {
 }
 
 fn updatePieceBufs(piece_bufs: Buffers, board_data: board.Board) void {
-    const PType = chess.PieceType;
-    _ = PType;
-    const Side = chess.Side;
-    _ = Side;
+    const Bitboard = bitboard.Bitboard;
     var vertices: [pieces_verts_len]f32 = [_]f32{0.0} ** (pieces_verts_len);
 
+    const empty = ~(board_data.white | board_data.black);
+
     var piece_ind: usize = 0;
-    for (board_data.piece_arr, 0..) |p, i| {
-        if (p.getPieceType() == .None) {
+    for (0..64) |i| {
+        const piece_bit: Bitboard = @as(u64, 1) << @truncate(i);
+
+        if (piece_bit & empty != 0) {
             continue;
         }
 
         const x: f32 = @as(f32, @floatFromInt(i % 8));
         const y: f32 = @as(f32, @floatFromInt(i / 8));
-        // std.debug.print("{d}, {d}\n", .{x, y});
-        // 0  1
-        // 2  3
-        // Vert 0: Top left
-        vertices[piece_ind + 0] = x + 0;
-        vertices[piece_ind + 1] = y + 1;
 
-        // Vert 1: Top right
-        vertices[piece_ind + 3] = x + 1;
-        vertices[piece_ind + 4] = y + 1;
+        {
+            // 0  1
+            // 2  3
+            // Vert 0: Top left
+            vertices[piece_ind + 0] = x + 0;
+            vertices[piece_ind + 1] = y + 1;
 
-        // Vert 2: Bottom left
-        vertices[piece_ind + 6] = x + 0;
-        vertices[piece_ind + 7] = y + 0;
+            // Vert 1: Top right
+            vertices[piece_ind + 3] = x + 1;
+            vertices[piece_ind + 4] = y + 1;
 
-        // Vert 3: Bottom right
-        vertices[piece_ind + 9] = x + 1;
-        vertices[piece_ind + 10] = y + 0;
+            // Vert 2: Bottom left
+            vertices[piece_ind + 6] = x + 0;
+            vertices[piece_ind + 7] = y + 0;
 
-        const type_val = @as(u32, @intFromEnum(p.getPieceType()));
-        const side_val = @as(u32, @intFromEnum(p.getPieceSide()));
-        const int_val = type_val + (6 * side_val);
-        const piece_val = @as(f32, @floatFromInt(int_val));
-        vertices[piece_ind + 2] = piece_val;
-        vertices[piece_ind + 5] = piece_val;
-        vertices[piece_ind + 8] = piece_val;
-        vertices[piece_ind + 11] = piece_val;
-        // std.debug.print("Piece val: {d}\n", .{piece_val});
-        // std.debug.print(
-        // "{}: {any}\t{any}\t{any}\t{any}\n",
-        // .{type_val, vertices[piece_ind .. piece_ind + 2], vertices[piece_ind + 3 .. piece_ind + 5], vertices[piece_ind + 6 .. piece_ind + 8], vertices[piece_ind + 9 .. piece_ind + 11]});
+            // Vert 3: Bottom right
+            vertices[piece_ind + 9] = x + 1;
+            vertices[piece_ind + 10] = y + 0;
+        }
+
+        const type_val: u8 = if (board_data.pawn & piece_bit != 0) 0b001 
+        else if (board_data.bishop & piece_bit != 0) 0b010 
+        else if (board_data.knight & piece_bit != 0) 0b011 
+        else if (board_data.rook & piece_bit != 0) 0b100 
+        else if (board_data.queen & piece_bit != 0) 0b101 
+        else 0b110;
+        const side_val: u8 = if (board_data.white & piece_bit != 0) 0b0 else 0b1;
+        const piece_val = @as(f32, @floatFromInt(type_val + (6 * side_val)));
+
+        {
+            vertices[piece_ind + 2] = piece_val;
+            vertices[piece_ind + 5] = piece_val;
+            vertices[piece_ind + 8] = piece_val;
+            vertices[piece_ind + 11] = piece_val;
+        }
+
         piece_ind += 12;
     }
-    // std.debug.print("{any}\n", .{vertices});
 
     gl.glBindBuffer(gl.GL_ARRAY_BUFFER, piece_bufs.VBO);
     gl.glBufferSubData(gl.GL_ARRAY_BUFFER, 0, vertices.len * @sizeOf(f32), &vertices);

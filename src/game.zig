@@ -16,7 +16,7 @@ pub const Game = struct {
 
     pub fn init(renderer: *const render.RenderState) Self {
         return Self{
-            .chessboard = board.Board.initFromFen(board.start_fen).?,
+            .chessboard = board.Board.initFromFen(board.start_fen),
             .client_white = undefined,
             .client_black = undefined,
             .renderer = renderer,
@@ -40,7 +40,6 @@ pub const Game = struct {
     }
 
     pub fn makeMove(self: *Self, move: chess.Move) void {
-        std.debug.print("{any}\n", .{move});
         self.chessboard.makeMove(move);
         switch (self.chessboard.side) {
             .White => {
@@ -48,7 +47,7 @@ pub const Game = struct {
             },
             .Black => {
                 self.client_black.requestMove();
-            }
+            },
         }
         self.renderer.updatePiecePositions(self.chessboard);
     }
