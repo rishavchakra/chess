@@ -1,3 +1,7 @@
 # Zig build and output files
 zig-cache
 zig-out
+
+# Unnecessary mac files
+.DS_STORE
+*/.DS_STORE
