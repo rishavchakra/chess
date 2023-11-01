@@ -17,7 +17,14 @@ pub const Board = struct {
     rook: Bitboard,
     queen: Bitboard,
     king: Bitboard,
+
+    // non-piece board state
     side: chess.Side,
+    has_enpassant: u1,
+    w_castle_l: u1,
+    w_castle_r: u1,
+    b_castle_l: u1,
+    b_castle_r: u1,
 
     pub fn initFromFen(fen_str: []const u8) Self {
         var pos: chess.PosRankFile = chess.PosRankFile.init(7, 0);
@@ -30,37 +37,75 @@ pub const Board = struct {
         var rook: Bitboard = 0;
         var queen: Bitboard = 0;
         var king: Bitboard = 0;
+        var side: chess.Side = undefined;
+        var w_castle_l: u1 = 0;
+        var w_castle_r: u1 = 0;
+        var b_castle_l: u1 = 0;
+        var b_castle_r: u1 = 0;
 
+        const FenStage = enum {
+            Pieces,
+            Side,
+            Castling,
+            EnPassant,
+            Halfmove,
+            Fullmove,
+        };
+        var stage: FenStage = .Pieces;
         for (fen_str) |fen_char| {
-            if (fen_char == '/') {
-                pos.rank -= 1;
-                pos.file = 0;
-                continue;
-            } else if (fen_char == ' ') {
-                break;
-            }
-            if (fen_char > 47 and fen_char < 57) {
-                pos.file +%= @truncate(fen_char - 0x30);
-                continue;
-            }
-            // const char_side: chess.Side = if (fen_char < 0x60) .White else .Black;
-            // const piece_char = if (fen_char > 0x60) fen_char - 0x20 else fen_char;
-            const piece_bit: Bitboard = @as(u64, 1) << pos.toInd().ind;
-            switch (fen_char) {
-                0x41...0x5A => white |= piece_bit,
-                0x61...0x7A => black |= piece_bit,
+            switch (stage) {
+                .Pieces => {
+                    if (fen_char == '/') {
+                        pos.rank -= 1;
+                        pos.file = 0;
+                        continue;
+                    } else if (fen_char == ' ') {
+                        break;
+                    }
+                    if (fen_char > 47 and fen_char < 57) {
+                        pos.file +%= @truncate(fen_char - 0x30);
+                        continue;
+                    }
+                    // const char_side: chess.Side = if (fen_char < 0x60) .White else .Black;
+                    // const piece_char = if (fen_char > 0x60) fen_char - 0x20 else fen_char;
+                    const piece_bit: Bitboard = @as(u64, 1) << pos.toInd().ind;
+                    switch (fen_char) {
+                        0x41...0x5A => white |= piece_bit,
+                        0x61...0x7A => black |= piece_bit,
+                        else => unreachable,
+                    }
+                    switch (fen_char) {
+                        'K', 'k' => king |= piece_bit,
+                        'Q', 'q' => queen |= piece_bit,
+                        'R', 'r' => rook |= piece_bit,
+                        'N', 'n' => knight |= piece_bit,
+                        'B', 'b' => bishop |= piece_bit,
+                        'P', 'p' => pawn |= piece_bit,
+                        else => unreachable,
+                    }
+                    pos.file +%= 1;
+                },
+                .Side => {
+                    switch (fen_char) {
+                        'w' => side = .White,
+                        'b' => side = .Black,
+                        ' ' => stage = .Castling,
+                        else => unreachable,
+                    }
+                },
+                .Castling => {
+                    switch (fen_char) {
+                        '-', ' ' => stage = .EnPassant,
+                        'K' => w_castle_r = 1,
+                        'Q' => w_castle_l = 1,
+                        'k' => b_castle_r = 1,
+                        'q' => b_castle_l = 1,
+                        else => unreachable,
+                    }
+                },
+                .EnPassant => break,
                 else => unreachable,
             }
-            switch (fen_char) {
-                'K', 'k' => king |= piece_bit,
-                'Q', 'q' => queen |= piece_bit,
-                'R', 'r' => rook |= piece_bit,
-                'N', 'n' => knight |= piece_bit,
-                'B', 'b' => bishop |= piece_bit,
-                'P', 'p' => pawn |= piece_bit,
-                else => unreachable,
-            }
-            pos.file +%= 1;
         }
 
         return Self{
@@ -72,7 +117,13 @@ pub const Board = struct {
             .rook = rook,
             .queen = queen,
             .king = king,
+
             .side = chess.Side.White,
+            .has_enpassant = 0,
+            .w_castle_l = w_castle_l,
+            .w_castle_r = w_castle_r,
+            .b_castle_l = b_castle_l,
+            .b_castle_r = b_castle_r,
         };
     }
 
