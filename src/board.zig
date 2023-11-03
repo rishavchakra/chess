@@ -1,6 +1,7 @@
 const chess = @import("chess.zig");
 const bitboard = @import("bitboard.zig");
 const move_gen = @import("move_gen.zig");
+const std = @import("std");
 
 pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 pub const test_fen = "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2";
@@ -118,7 +119,7 @@ pub const Board = struct {
             .queen = queen,
             .king = king,
 
-            .side = chess.Side.White,
+            .side = side,
             .has_enpassant = 0,
             .w_castle_l = w_castle_l,
             .w_castle_r = w_castle_r,
@@ -127,46 +128,90 @@ pub const Board = struct {
         };
     }
 
-    pub fn makeMove(self: *Self, move: chess.Move) void {
-        _ = move;
-        _ = self;
+    pub const MoveError = error{ NonePiece, InvalidMove };
+    // Mutates the current board to reflect the move
+    pub fn makeMove(self: *Self, move: chess.Move) MoveError!void {
+        const from_bit: bitboard.Placebit = @as(u64, 1) << move.pos_from.ind;
+        const to_bit: bitboard.Placebit = @as(u64, 1) << move.pos_to.ind;
+
+        const piece_side: chess.Side = @enumFromInt(@intFromBool(from_bit & self.black != 0));
+        const piece_type: chess.PieceType = @enumFromInt(@as(u3, @intFromBool(from_bit & self.pawn != 0) * 1) +
+            @as(u3, @intFromBool(from_bit & self.bishop != 0)) * 2 +
+            @as(u3, @intFromBool(from_bit & self.knight != 0)) * 3 +
+            @as(u3, @intFromBool(from_bit & self.rook != 0)) * 4 +
+            @as(u3, @intFromBool(from_bit & self.queen != 0)) * 5 +
+            @as(u3, @intFromBool(from_bit & self.king != 0)) * 6);
+
+        switch (move.flags) {
+            .Capture => {
+                switch (piece_side) {
+                    .White => {
+                        self.black ^= to_bit;
+                    },
+                    .Black => {
+                        self.white ^= to_bit;
+                    }
+                }
+                self.pawn ^= to_bit;
+                self.bishop ^= to_bit;
+                self.knight ^= to_bit;
+                self.rook ^= to_bit;
+                self.queen ^= to_bit;
+                self.king ^= to_bit; // What?
+            },
+            .CastleKing => {},
+            .CastleQueen => {},
+            else => {},
+        }
+        switch (piece_type) {
+            .None => {
+                return MoveError.NonePiece;
+            },
+            .Pawn => {
+                self.pawn ^= from_bit;
+                self.pawn |= to_bit;
+            },
+            .Bishop => {
+                self.bishop ^= from_bit;
+                self.bishop |= to_bit;
+            },
+            .Knight => {
+                self.knight ^= from_bit;
+                self.knight |= to_bit;
+            },
+            .Rook => {
+                self.rook ^= from_bit;
+                self.rook |= to_bit;
+            },
+            .Queen => {
+                self.queen ^= from_bit;
+                self.queen |= to_bit;
+            },
+            .King => {
+                self.king ^= from_bit;
+                self.king |= to_bit;
+            },
+        }
+        switch (piece_side) {
+            .White => {
+                self.white ^= from_bit;
+                self.white |= to_bit;
+            },
+            .Black => {
+                self.black ^= from_bit;
+                self.black |= to_bit;
+            },
+        }
+
+        self.side = self.side.oppositeSide();
     }
 
+    // Makes a new board with the move from the current board
     pub fn initBoardWithMove(self: *const Self, move: chess.Move) void {
         _ = move;
         _ = self;
     }
 
-    // TODO: Replace with type of move list
-    fn getMoves(self: *const Self, side: chess.Side) void {
-        const w_pawn = self.white & self.pawn;
-        const b_pawn = self.black & self.pawn;
-        const w_bishop = self.white & self.bishop;
-        _ = w_bishop;
-        const b_bishop = self.black & self.bishop;
-        _ = b_bishop;
-        const w_knight = self.white & self.knight;
-        _ = w_knight;
-        const b_knight = self.black & self.knight;
-        _ = b_knight;
-        const w_rook = self.white & self.rook;
-        _ = w_rook;
-        const b_rook = self.black & self.rook;
-        _ = b_rook;
-        const w_queen = self.white & self.queen;
-        _ = w_queen;
-        const b_queen = self.black & self.queen;
-        _ = b_queen;
-        const w_king = self.white & self.king;
-        _ = w_king;
-        const b_king = self.black & self.king;
-        _ = b_king;
-        const empty = ~(self.white & self.black);
-
-        const pawn_pushes = empty & (if (side == .White) bitboard.shiftNorth(w_pawn, 1) else bitboard.shiftSouth(b_pawn, 1));
-        _ = pawn_pushes;
-        const double_pawn_pushes = empty & (if (side == .White) 0x00000000ff000000 else 0x000000ff00000000) & 1;
-        _ = double_pawn_pushes;
     }
 
     fn getWhiteMoves(self: *const Self) void {
