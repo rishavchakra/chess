@@ -34,7 +34,7 @@ pub fn placebitFromInd(pos_ind: chess.PosInd) Placebit {
 }
 
 pub fn indFromPlacebit(pos: Placebit) chess.PosInd {
-    return chess.PosInd{ .ind = @ctz(pos) };
+    return chess.PosInd{ .ind = @truncate(@ctz(pos)) };
 }
 
 pub fn shiftNorth(board: Bitboard, comptime n: u8) Bitboard {
@@ -148,23 +148,24 @@ pub fn print(board: Bitboard) void {
 ////////////////////////////////
 // Testing
 ////////////////////////////////
-test "print" {
-    // All work as expected
-    const a1 = rank1 & fileA;
-    std.debug.print("\nA1 square", .{});
-    print(a1);
-    const checkerboard = 0x55aa55aa55aa55aa;
-    std.debug.print("\ncheckerboard", .{});
-    print(checkerboard);
-    std.debug.print("\nRank 1", .{});
-    print(rank1);
-    // std.debug.print("\nRank 8", .{});
-    // print(rank8);
-    std.debug.print("\nFile A", .{});
-    print(fileA);
-    // std.debug.print("\nFile H", .{});
-    // print(fileH);
-}
+
+// Printing works as expected - no need to gunk up testing with print statements
+// test "print" {
+//     const a1 = rank1 & fileA;
+//     std.debug.print("\nA1 square", .{});
+//     print(a1);
+//     const checkerboard = 0x55aa55aa55aa55aa;
+//     std.debug.print("\ncheckerboard", .{});
+//     print(checkerboard);
+//     std.debug.print("\nRank 1", .{});
+//     print(rank1);
+//     std.debug.print("\nRank 8", .{});
+//     print(rank8);
+//     std.debug.print("\nFile A", .{});
+//     print(fileA);
+//     std.debug.print("\nFile H", .{});
+//     print(fileH);
+// }
 
 test "shift north-south" {
     try testing.expect(rank2 == shiftNorth(rank1, 1));
