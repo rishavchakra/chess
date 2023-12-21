@@ -82,6 +82,36 @@ fn sliderMoves(hv_sliders: BB, diag_sliders: BB, movable_mask: BB) BB {
     return move_mask;
 }
 
+fn hvSliderMoves(hv_sliders: BB, movable_mask: BB) BB {
+    // North, South, East, West
+    var hv_iter = [_]BB{hv_sliders} ** 4;
+    var move_mask: BB = 0;
+    for (0..8) |_| {
+        hv_iter[0] = bitboard.shiftNorth(hv_iter[0], 1) & movable_mask;
+        hv_iter[1] = bitboard.shiftSouth(hv_iter[1], 1) & movable_mask;
+        hv_iter[2] = bitboard.shiftEast(hv_iter[2], 1) & movable_mask;
+        hv_iter[3] = bitboard.shiftWest(hv_iter[3], 1) & movable_mask;
+
+        move_mask |= hv_iter[0] | hv_iter[1] | hv_iter[2] | hv_iter[3];
+    }
+    return move_mask;
+}
+
+fn diagSliderMoves(diag_sliders: BB, movable_mask: BB) BB {
+    // NE, SE, SW, NW
+    var diag_iter = [_]BB{diag_sliders} ** 4;
+    var move_mask: BB = 0;
+    for (0..8) |_| {
+        diag_iter[0] = bitboard.shiftNE(diag_iter[0], 1) & movable_mask;
+        diag_iter[1] = bitboard.shiftSE(diag_iter[1], 1) & movable_mask;
+        diag_iter[2] = bitboard.shiftSW(diag_iter[2], 1) & movable_mask;
+        diag_iter[3] = bitboard.shiftNW(diag_iter[3], 1) & movable_mask;
+
+        move_mask |= diag_iter[0] | diag_iter[1] | diag_iter[2] | diag_iter[3];
+    }
+    return move_mask;
+}
+
 fn kingMoves(king: bitboard.Placebit) BB {
     const king_ind = bitboard.indFromPlacebit(king);
     return move_gen_lookup.kingMoveLookup[king_ind];
