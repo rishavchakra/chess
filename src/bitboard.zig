@@ -29,6 +29,40 @@ pub const fileF = 0x2020202020202020;
 pub const fileG = 0x4040404040404040;
 pub const fileH = 0x8080808080808080;
 
+pub const diag0 = 0x8040201008040201;
+pub const diag1 = 0x4020100804020100;
+pub const diag2 = 0x2010080402010000;
+pub const diag3 = 0x1008040201000000;
+pub const diag4 = 0x0804020100000000;
+pub const diag5 = 0x0402010000000000;
+pub const diag6 = 0x0201000000000000;
+pub const diag7 = 0x0100000000000000;
+pub const diag8 = 0; // DNE
+pub const diag9 = 0x0000000000000080;
+pub const diag10 = 0x0000000000008040;
+pub const diag11 = 0x0000000000804020;
+pub const diag12 = 0x0000000080402010;
+pub const diag13 = 0x0000008040201008;
+pub const diag14 = 0x0000804020100804;
+pub const diag15 = 0x0080402010080402;
+
+pub const antidiag0 = 0x0102040810204080;
+pub const antidiag1 = 0x0001020408102040;
+pub const antidiag2 = 0x0000010204081020;
+pub const antidiag3 = 0x0000000102040810;
+pub const antidiag4 = 0x0000000001020408;
+pub const antidiag5 = 0x0000000000010204;
+pub const antidiag6 = 0x0000000000000102;
+pub const antidiag7 = 0x0000000000000001;
+pub const antidiag8 = 0; // DNE
+pub const antidiag9 = 0x8000000000000000;
+pub const antidiag10 = 0x4080000000000000;
+pub const antidiag11 = 0x2040800000000000;
+pub const antidiag12 = 0x1020408000000000;
+pub const antidiag13 = 0x0810204080000000;
+pub const antidiag14 = 0x0408102040800000;
+pub const antidiag15 = 0x0204081020408000;
+
 pub fn placebitFromInd(pos_ind: chess.PosInd) Placebit {
     return @as(u64, 1) << pos_ind.ind;
 }
