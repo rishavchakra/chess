@@ -35,7 +35,7 @@ fn pawnAttacks(pawns: BB, comptime side: chess.Side) BB {
 
 /// Calculates moves of all knights
 /// Useful for getting attacked squares
-fn knightMoves(knights: BB) BB {
+fn knightMovesParallel(knights: BB) BB {
     const l1 = (knights >> 1) & 0x7f7f7f7f7f7f7f7f;
     const l2 = (knights >> 2) & 0x3f3f3f3f3f3f3f3f;
     const r1 = (knights << 1) & 0xfefefefefefefefe;
@@ -52,19 +52,65 @@ fn knightMovesIndividual(knight: bitboard.Placebit) BB {
     return move_gen_lookup.knightMoveLookup[knight_ind.ind];
 }
 
+/// Calculates the valid moves of a single orthogonally-sliding piece
+/// Treats all occupied squares as attackable, whether ally or enemy
+/// bitwise & with enemy mask to get attacked squares
+fn hvSliderMovesIndividual(piece: bitboard.Placebit, occupied: BB) BB {
+    const piece_ind = bitboard.indFromPlacebit(piece).ind;
+
+    const file = move_gen_lookup.sliderFiles[piece_ind];
+    const rank = move_gen_lookup.sliderRanks[piece_ind];
+
+    const file_o = occupied & file;
+    const rank_o = occupied & rank;
+    const pos_file_ray = (file_o ^ (file_o -% (2 *% piece))) & file;
+    const pos_rank_ray = (rank_o ^ (rank_o -% (2 *% piece))) & rank;
+
+    const rev_piece = @bitReverse(piece);
+    const rev_file_o = @bitReverse(file_o);
+    const rev_rank_o = @bitReverse(rank_o);
+    const neg_file_ray = @bitReverse(rev_file_o ^ (rev_file_o -% (2 *% rev_piece))) & file;
+    const neg_rank_ray = @bitReverse(rev_rank_o ^ (rev_rank_o -% (2 *% rev_piece))) & rank;
+
+    return pos_file_ray | neg_file_ray | pos_rank_ray | neg_rank_ray;
+}
+
+/// Calculates the valid moves of a single diagonally-sliding piece
+/// Treats all occupied squares as attackable, whether ally or enemy
+/// bitwise & with enemy mask to get attacked squares
+fn diagSliderMovesIndividual(piece: bitboard.Placebit, occupied: BB) BB {
+    const piece_ind = bitboard.indFromPlacebit(piece);
+
+    const diag = move_gen_lookup.sliderDiagonals[piece_ind];
+    const antidiag = move_gen_lookup.sliderAntidiagonals[piece_ind];
+
+    const diag_o = occupied & diag;
+    const antidiag_o = occupied & antidiag;
+    const pos_diag_ray = (diag_o ^ (diag_o -% (2 *% piece))) & diag;
+    const pos_antidiag_ray = (antidiag_o ^ (antidiag_o -% (2 *% piece))) & antidiag;
+
+    const rev_piece = @bitReverse(piece);
+    const rev_diag_o = @bitReverse(diag_o);
+    const rev_antidiag_o = @bitReverse(antidiag_o);
+    const neg_diag_ray = @bitReverse(rev_diag_o ^ (rev_diag_o -% (2 *% rev_piece))) & diag;
+    const neg_antidiag_ray = @bitReverse(rev_antidiag_o ^ (rev_antidiag_o -% (2 *% rev_piece))) & antidiag;
+
+    return pos_diag_ray | neg_diag_ray | pos_antidiag_ray | neg_antidiag_ray;
+}
+
 /// Calculates moves of all sliding pieces
 /// Useful for finding attacked squares or moves
 /// movable_mask determines behaviour
 /// enemy or empty: attacked squares
 /// empty: movable, non-attacked squares
 /// bitboard.all: full ranges of motion (skewers, pins, etc.)
-fn sliderMoves(hv_sliders: BB, diag_sliders: BB, movable_mask: BB) BB {
+fn sliderMovesOld(hv_sliders: BB, diag_sliders: BB, movable_mask: BB) BB {
     // North, South, East, West
     var hv_iter = [_]BB{hv_sliders} ** 4;
     // NE, SE, SW, NW
     var diag_iter = [_]BB{diag_sliders} ** 4;
     var move_mask: BB = 0;
-    for (0..8) |_| {
+    inline for (0..8) |_| {
         hv_iter[0] = bitboard.shiftNorth(hv_iter[0], 1) & movable_mask;
         hv_iter[1] = bitboard.shiftSouth(hv_iter[1], 1) & movable_mask;
         hv_iter[2] = bitboard.shiftEast(hv_iter[2], 1) & movable_mask;
@@ -82,34 +128,90 @@ fn sliderMoves(hv_sliders: BB, diag_sliders: BB, movable_mask: BB) BB {
     return move_mask;
 }
 
-fn hvSliderMoves(hv_sliders: BB, movable_mask: BB) BB {
-    // North, South, East, West
-    var hv_iter = [_]BB{hv_sliders} ** 4;
-    var move_mask: BB = 0;
-    for (0..8) |_| {
-        hv_iter[0] = bitboard.shiftNorth(hv_iter[0], 1) & movable_mask;
-        hv_iter[1] = bitboard.shiftSouth(hv_iter[1], 1) & movable_mask;
-        hv_iter[2] = bitboard.shiftEast(hv_iter[2], 1) & movable_mask;
-        hv_iter[3] = bitboard.shiftWest(hv_iter[3], 1) & movable_mask;
+/// Kogge-Stone algorithm for flood fill
+/// Calculates moves of all orthogonally-sliding pieces
+/// Useful for finding attacked squares or moves
+fn hvSliderMovesParallel(hv_sliders: BB, occupied: BB) BB {
+    var empty = (~occupied) & (~bitboard.rank1);
+    var hv_north = hv_sliders;
+    hv_north |= empty & bitboard.shiftNorth(hv_north, 1);
+    empty = empty & bitboard.shiftNorth(empty, 1);
+    hv_north |= empty & bitboard.shiftNorth(hv_north, 2);
+    empty = empty & bitboard.shiftNorth(empty, 2);
+    hv_north |= empty & bitboard.shiftNorth(hv_north, 4);
+    hv_north |= bitboard.shiftNorth(hv_north, 1);
 
-        move_mask |= hv_iter[0] | hv_iter[1] | hv_iter[2] | hv_iter[3];
-    }
-    return move_mask;
+    empty = (~occupied) & (~bitboard.rank8);
+    var hv_south = hv_sliders;
+    hv_south |= empty & bitboard.shiftSouth(hv_south, 1);
+    empty = empty & bitboard.shiftSouth(empty, 1);
+    hv_south |= empty & bitboard.shiftSouth(hv_south, 2);
+    empty = empty & bitboard.shiftSouth(empty, 2);
+    hv_south |= empty & bitboard.shiftSouth(hv_south, 4);
+    hv_south |= bitboard.shiftSouth(hv_south, 1);
+
+    empty = (~occupied) & (~bitboard.fileA);
+    var hv_east = hv_sliders;
+    hv_east |= empty & bitboard.shiftEast(hv_east, 1);
+    empty = empty & bitboard.shiftEast(empty, 1);
+    hv_east |= empty & bitboard.shiftEast(hv_east, 2);
+    empty = empty & bitboard.shiftEast(empty, 2);
+    hv_east |= empty & bitboard.shiftEast(hv_east, 4);
+    hv_east |= bitboard.shiftEast(hv_east, 1);
+
+    empty = (~occupied) & (~bitboard.fileH);
+    var hv_west = hv_sliders;
+    hv_west |= empty & bitboard.shiftWest(hv_west, 1);
+    empty = empty & bitboard.shiftWest(empty, 1);
+    hv_west |= empty & bitboard.shiftWest(hv_west, 2);
+    empty = empty & bitboard.shiftWest(empty, 2);
+    hv_west |= empty & bitboard.shiftWest(hv_west, 4);
+    hv_west |= bitboard.shiftWest(hv_west, 1);
+
+    return (hv_north | hv_south | hv_east | hv_west) ^ hv_sliders;
 }
 
-fn diagSliderMoves(diag_sliders: BB, movable_mask: BB) BB {
-    // NE, SE, SW, NW
-    var diag_iter = [_]BB{diag_sliders} ** 4;
-    var move_mask: BB = 0;
-    for (0..8) |_| {
-        diag_iter[0] = bitboard.shiftNE(diag_iter[0], 1) & movable_mask;
-        diag_iter[1] = bitboard.shiftSE(diag_iter[1], 1) & movable_mask;
-        diag_iter[2] = bitboard.shiftSW(diag_iter[2], 1) & movable_mask;
-        diag_iter[3] = bitboard.shiftNW(diag_iter[3], 1) & movable_mask;
+/// Kogge-Stone algorithm for flood fill
+/// Calculates moves of all diagonally-sliding pieces
+/// Useful for finding attacked squares or moves
+fn diagSliderMovesParallel(diag_sliders: BB, occupied: BB) BB {
+    var empty = (~occupied) & (~bitboard.rank1);
+    var diag_ne = diag_sliders;
+    diag_ne |= empty & bitboard.shiftNE(diag_ne, 1);
+    empty = empty & bitboard.shiftNE(empty, 1);
+    diag_ne |= empty & bitboard.shiftNE(diag_ne, 2);
+    empty = empty & bitboard.shiftNE(empty, 2);
+    diag_ne |= empty & bitboard.shiftNE(diag_ne, 4);
+    diag_ne |= bitboard.shiftNE(diag_ne, 1);
 
-        move_mask |= diag_iter[0] | diag_iter[1] | diag_iter[2] | diag_iter[3];
-    }
-    return move_mask;
+    empty = (~occupied) & (~bitboard.rank8);
+    var diag_se = diag_sliders;
+    diag_se |= empty & bitboard.shiftSE(diag_se, 1);
+    empty = empty & bitboard.shiftSE(empty, 1);
+    diag_se |= empty & bitboard.shiftSE(diag_se, 2);
+    empty = empty & bitboard.shiftSE(empty, 2);
+    diag_se |= empty & bitboard.shiftSE(diag_se, 4);
+    diag_se |= bitboard.shiftSE(diag_se, 1);
+
+    empty = (~occupied) & (~bitboard.fileA);
+    var diag_sw = diag_sliders;
+    diag_sw |= empty & bitboard.shiftSW(diag_sw, 1);
+    empty = empty & bitboard.shiftSW(empty, 1);
+    diag_sw |= empty & bitboard.shiftSW(diag_sw, 2);
+    empty = empty & bitboard.shiftSW(empty, 2);
+    diag_sw |= empty & bitboard.shiftSW(diag_sw, 4);
+    diag_sw |= bitboard.shiftSW(diag_sw, 1);
+
+    empty = (~occupied) & (~bitboard.fileH);
+    var diag_nw = diag_sliders;
+    diag_nw |= empty & bitboard.shiftNW(diag_nw, 1);
+    empty = empty & bitboard.shiftNW(empty, 1);
+    diag_nw |= empty & bitboard.shiftNW(diag_nw, 2);
+    empty = empty & bitboard.shiftNW(empty, 2);
+    diag_nw |= empty & bitboard.shiftNW(diag_nw, 4);
+    diag_nw |= bitboard.shiftNW(diag_nw, 1);
+
+    return (diag_ne | diag_se | diag_sw | diag_nw) ^ diag_sliders;
 }
 
 fn kingMoves(king: bitboard.Placebit) BB {
@@ -162,7 +264,7 @@ test "knight behaviour equality" {
     for (0..64) |i| {
         const pos_ind = chess.PosInd{ .ind = @truncate(i) };
         const pos = bitboard.placebitFromInd(pos_ind);
-        try testing.expect(knightMovesIndividual(pos) == knightMoves(pos));
+        try testing.expect(knightMovesIndividual(pos) == knightMovesParallel(pos));
     }
 }
 
@@ -194,9 +296,13 @@ test "lateral slider moves" {
     // Unobstructed movement
     const a1 = bitboard.rank1 & bitboard.fileA;
     const a1_moves = (bitboard.rank1 | bitboard.fileA) ^ a1;
-    try testing.expectEqual(sliderMoves(a1, 0, bitboard.all), a1_moves);
+    const found_a1_moves = hvSliderMovesIndividual(a1, a1);
+    // bitboard.print(found_a1_moves);
+    try testing.expectEqual(found_a1_moves, a1_moves);
 
     const e4 = bitboard.rank4 & bitboard.fileE;
     const e4_moves = (bitboard.rank4 | bitboard.fileE) ^ e4;
-    try testing.expectEqual(sliderMoves(e4, 0, bitboard.all), e4_moves);
+    const found_e4_moves = hvSliderMovesIndividual(e4, e4);
+    // bitboard.print(found_e4_moves);
+    try testing.expectEqual(found_e4_moves, e4_moves);
 }
