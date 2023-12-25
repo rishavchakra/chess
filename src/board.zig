@@ -313,41 +313,4 @@ pub const Board = struct {
             },
         }
     }
-
-
-    fn getWhiteMoves(self: *const Self) void {
-        const w_pawn = self.white & self.pawn;
-        const b_pawn = self.black & self.pawn;
-        _ = b_pawn;
-        const w_bishop = self.white & self.bishop;
-        const b_bishop = self.black & self.bishop;
-        _ = b_bishop;
-        const w_knight = self.white & self.knight;
-        const b_knight = self.black & self.knight;
-        _ = b_knight;
-        const w_rook = self.white & self.rook;
-        const b_rook = self.black & self.rook;
-        _ = b_rook;
-        const w_queen = self.white & self.queen;
-        const b_queen = self.black & self.queen;
-        _ = b_queen;
-        const w_king = self.white & self.king;
-        const b_king = self.black & self.king;
-        _ = b_king;
-        const empty = ~(self.white & self.black);
-        const diag_sliders = w_bishop | w_queen;
-        _ = diag_sliders;
-        const vh_sliders = w_rook | w_queen;
-        _ = vh_sliders;
-
-        const pawn_pushes = empty & bitboard.shiftNorth(w_pawn, 1);
-        const double_pawn_pushes = empty & pawn_pushes & 0x00000000ff000000;
-
-        const knight_moves = move_gen.getKnightAttacks(w_knight);
-
-        const king_ind = @ctz(w_king);
-        const king_moves = move_gen.kingMoveLookup[king_ind];
-
-        return pawn_pushes | double_pawn_pushes | knight_moves | king_moves;
-    }
 };
