@@ -246,6 +246,8 @@ pub const Board = struct {
             },
             else => {},
         }
+
+        self.side = self.side.oppositeSide();
     }
 
     // Queenside castling
