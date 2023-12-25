@@ -405,12 +405,21 @@ fn updatePieceBufs(piece_bufs: Buffers, board_data: board.Board) void {
             vertices[piece_ind + 10] = y + 0;
         }
 
-        const type_val: u8 = if (board_data.pawn & piece_bit != 0) 0b001 
-        else if (board_data.bishop & piece_bit != 0) 0b010 
-        else if (board_data.knight & piece_bit != 0) 0b011 
-        else if (board_data.rook & piece_bit != 0) 0b100 
-        else if (board_data.queen & piece_bit != 0) 0b101 
-        else 0b110;
+        const type_val: u8 = type_byte: {
+            if (board_data.pawn & piece_bit != 0) {
+                break :type_byte 0b001;
+            } else if (board_data.bishop & piece_bit != 0) {
+                break :type_byte 0b010;
+            } else if (board_data.knight & piece_bit != 0) {
+                break :type_byte 0b011;
+            } else if (board_data.rook & piece_bit != 0) {
+                break :type_byte 0b100;
+            } else if (board_data.queen & piece_bit != 0) {
+                break :type_byte 0b101;
+            } else {
+                break :type_byte 0b110;
+            }
+        };
         const side_val: u8 = if (board_data.white & piece_bit != 0) 0b0 else 0b1;
         const piece_val = @as(f32, @floatFromInt(type_val + (6 * side_val)));
 
