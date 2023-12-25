@@ -128,71 +128,43 @@ pub const Board = struct {
         };
     }
 
-    pub const MoveError = error{ NonePiece, InvalidMove };
-    // Mutates the current board to reflect the move
-    pub fn makeMove(self: *Self, move: chess.Move) MoveError!void {
-        const from_bit: bitboard.Placebit = @as(u64, 1) << move.pos_from.ind;
-        const to_bit: bitboard.Placebit = @as(u64, 1) << move.pos_to.ind;
+    /// Mutably makes a move on the given board
+    /// Assumes that the move is valid
+    /// Be careful with castling especially;
+    /// if not a valid castle, will spawn a new rook
+    pub fn makeMove(self: *Self, move: chess.Move) void {
+        const from_bit = bitboard.placebitFromInd(move.pos_from);
+        const to_bit = bitboard.placebitFromInd(move.pos_to);
 
-        const piece_side: chess.Side = @enumFromInt(@intFromBool(from_bit & self.black != 0));
-        const piece_type: chess.PieceType = @enumFromInt(@as(u3, @intFromBool(from_bit & self.pawn != 0) * 1) +
-            @as(u3, @intFromBool(from_bit & self.bishop != 0)) * 2 +
-            @as(u3, @intFromBool(from_bit & self.knight != 0)) * 3 +
-            @as(u3, @intFromBool(from_bit & self.rook != 0)) * 4 +
-            @as(u3, @intFromBool(from_bit & self.queen != 0)) * 5 +
-            @as(u3, @intFromBool(from_bit & self.king != 0)) * 6);
+        // Regardless of piece type, nothing should be in
+        // the target square except the new piece
+        self.pawn ^= to_bit;
+        self.bishop ^= to_bit;
+        self.knight ^= to_bit;
+        self.rook ^= to_bit;
+        self.queen ^= to_bit;
+        self.king ^= to_bit;
 
-        switch (move.flags) {
-            .Capture => {
-                switch (piece_side) {
-                    .White => {
-                        self.black ^= to_bit;
-                    },
-                    .Black => {
-                        self.white ^= to_bit;
-                    }
-                }
-                self.pawn ^= to_bit;
-                self.bishop ^= to_bit;
-                self.knight ^= to_bit;
-                self.rook ^= to_bit;
-                self.queen ^= to_bit;
-                self.king ^= to_bit; // What?
-            },
-            .CastleKing => {},
-            .CastleQueen => {},
-            else => {},
+        if (self.pawn & from_bit > 0) {
+            self.pawn ^= from_bit;
+            self.pawn |= to_bit;
+        } else if (self.bishop & from_bit > 0) {
+            self.bishop ^= from_bit;
+            self.bishop |= to_bit;
+        } else if (self.knight & from_bit > 0) {
+            self.knight ^= from_bit;
+            self.knight |= to_bit;
+        } else if (self.rook & from_bit > 0) {
+            self.rook ^= from_bit;
+            self.rook |= to_bit;
+        } else if (self.queen & from_bit > 0) {
+            self.queen ^= from_bit;
+            self.queen |= to_bit;
+        } else {
+            self.king ^= from_bit;
+            self.king |= to_bit;
         }
-        switch (piece_type) {
-            .None => {
-                return MoveError.NonePiece;
-            },
-            .Pawn => {
-                self.pawn ^= from_bit;
-                self.pawn |= to_bit;
-            },
-            .Bishop => {
-                self.bishop ^= from_bit;
-                self.bishop |= to_bit;
-            },
-            .Knight => {
-                self.knight ^= from_bit;
-                self.knight |= to_bit;
-            },
-            .Rook => {
-                self.rook ^= from_bit;
-                self.rook |= to_bit;
-            },
-            .Queen => {
-                self.queen ^= from_bit;
-                self.queen |= to_bit;
-            },
-            .King => {
-                self.king ^= from_bit;
-                self.king |= to_bit;
-            },
-        }
-        switch (piece_side) {
+        switch (self.side) {
             .White => {
                 self.white ^= from_bit;
                 self.white |= to_bit;
@@ -203,16 +175,145 @@ pub const Board = struct {
             },
         }
 
-        self.side = self.side.oppositeSide();
+        switch (move.flags) {
+            .CaptureEP => {
+                switch (self.side) {
+                    .White => {
+                        const ep_pawn_bit = bitboard.shiftSouth(to_bit, 1);
+                        self.black ^= ep_pawn_bit;
+                        self.pawn ^= ep_pawn_bit;
+                    },
+                    .Black => {
+                        const ep_pawn_bit = bitboard.shiftNorth(to_bit, 1);
+                        self.white ^= ep_pawn_bit;
+                        self.pawn ^= ep_pawn_bit;
+                    },
+                }
+            },
+            .PromoBishop, .CapturePromoBishop => {
+                self.pawn ^= to_bit;
+                self.bishop |= to_bit;
+            },
+            .PromoKnight, .CapturePromoKnight => {
+                self.pawn ^= to_bit;
+                self.knight |= to_bit;
+            },
+            .PromoRook, .CapturePromoRook => {
+                self.pawn ^= to_bit;
+                self.rook |= to_bit;
+            },
+            .PromoQueen, .CapturePromoQueen => {
+                self.pawn ^= to_bit;
+                self.queen |= to_bit;
+            },
+            .CastleKing => {
+                switch (self.side) {
+                    .White => {
+                        // Only one king, of course
+                        self.king = bitboard.rank1 & bitboard.fileG;
+                        // Be careful here - if unchecked, this will spawn a new rook
+                        self.rook ^= bitboard.rank1 & bitboard.fileH;
+                        self.rook |= bitboard.rank1 & bitboard.fileF;
+                        self.white ^= 0xf0;
+                        self.white |= 0x60;
+                    },
+                    .Black => {
+                        self.king = bitboard.rank8 & bitboard.fileG;
+                        self.rook ^= bitboard.rank8 & bitboard.fileH;
+                        self.rook |= bitboard.rank8 & bitboard.fileF;
+                        self.black ^= 0xf000000000000000;
+                        self.black |= 0x6000000000000000;
+                    },
+                }
+            },
+            .CastleQueen => {
+                switch (self.side) {
+                    .White => {
+                        self.king = bitboard.rank1 & bitboard.fileC;
+                        self.rook ^= bitboard.rank1 & bitboard.fileA;
+                        self.rook |= bitboard.rank1 & bitboard.fileD;
+                        self.white ^= 0x1f;
+                        self.white |= 0x0c;
+                    },
+                    .Black => {
+                        self.king = bitboard.rank8 & bitboard.fileC;
+                        self.rook ^= bitboard.rank8 & bitboard.fileA;
+                        self.rook |= bitboard.rank8 & bitboard.fileD;
+                        self.black ^= 0x1f00000000000000;
+                        self.black |= 0x0c00000000000000;
+                    },
+                }
+            },
+            else => {},
+        }
     }
 
-    // Makes a new board with the move from the current board
-    pub fn initBoardWithMove(self: *const Self, move: chess.Move) void {
-        _ = move;
-        _ = self;
+    // Queenside castling
+    fn canCastleLeft(self: *const Self, occupied: Bitboard, attacked: Bitboard) bool {
+        switch (self.side) {
+            .White => {
+                // TODO: simplify to single statement
+                // TODO: make these magic numbers constants in the bitboard file
+                // can't castle through occupied spaces or move the king through check
+                if (!self.w_castle_l) {
+                    return false;
+                }
+                if (occupied & 0xe > 0 or attacked & 0x1c > 0) {
+                    return false;
+                }
+                if (self.white & self.rooks & 0x1 > 0) {
+                    return true;
+                }
+                return false;
+            },
+            .Black => {
+                if (!self.b_castle_l) {
+                    return false;
+                }
+                if (occupied & (0xe << 56) > 0 or attacked & (0x70 << 56)) {
+                    return false;
+                }
+                if (self.black & self.rooks & (0x1 << 56) > 0) {
+                    return true;
+                }
+                return false;
+            },
+        }
     }
 
+    // Kingside castling
+    fn canCastleRight(self: *const Self, occupied: Bitboard, attacked: Bitboard) bool {
+        switch (self.side) {
+            .White => {
+                // TODO: simplify to single statement
+                // TODO: make these magic numbers constants in the bitboard file
+                // can't castle through occupied spaces or move the king through check
+                if (!self.w_castle_r) {
+                    return false;
+                }
+                if (occupied & 0x60 > 0 or attacked & 0x70 > 0) {
+                    return false;
+                }
+                if (self.white & self.rooks & 0x80 > 0) {
+                    return true;
+                }
+                return false;
+            },
+            .Black => {
+                if (!self.b_castle_r) {
+                    return false;
+                }
+                if (occupied & (0x60 << 56) > 0 or attacked & (0x70 << 56)) {
+                    return false;
+                }
+                if (self.white & self.rooks & (0x80 << 56) > 0) {
+                    return true;
+                }
+                return false;
+            },
+        }
     }
+
 
     fn getWhiteMoves(self: *const Self) void {
         const w_pawn = self.white & self.pawn;
