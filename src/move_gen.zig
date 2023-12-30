@@ -79,7 +79,7 @@ fn hvSliderMovesIndividual(piece: bitboard.Placebit, occupied: BB) BB {
 /// Treats all occupied squares as attackable, whether ally or enemy
 /// bitwise & with enemy mask to get attacked squares
 fn diagSliderMovesIndividual(piece: bitboard.Placebit, occupied: BB) BB {
-    const piece_ind = bitboard.indFromPlacebit(piece);
+    const piece_ind = bitboard.indFromPlacebit(piece).ind;
 
     const diag = move_gen_lookup.sliderDiagonals[piece_ind];
     const antidiag = move_gen_lookup.sliderAntidiagonals[piece_ind];
@@ -292,7 +292,23 @@ test "knight moves" {
     try testing.expectEqual(knightMovesIndividual(h8), h8_moves);
 }
 
-test "lateral slider moves" {
+test "orthogonal slider equality" {
+    for (0..64) |i| {
+        const pos_ind = chess.PosInd{ .ind = @truncate(i) };
+        const pos = bitboard.placebitFromInd(pos_ind);
+        try testing.expect(hvSliderMovesIndividual(pos, pos) == hvSliderMovesParallel(pos, pos));
+    }
+}
+
+test "diagonal slider equality" {
+    for (0..64) |i| {
+        const pos_ind = chess.PosInd{ .ind = @truncate(i) };
+        const pos = bitboard.placebitFromInd(pos_ind);
+        try testing.expect(diagSliderMovesIndividual(pos, pos) == diagSliderMovesParallel(pos, pos));
+    }
+}
+
+test "orthogonal slider moves" {
     // Unobstructed movement
     const a1 = bitboard.rank1 & bitboard.fileA;
     const a1_moves = (bitboard.rank1 | bitboard.fileA) ^ a1;
