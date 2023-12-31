@@ -6,7 +6,128 @@ const board = @import("board.zig");
 const chess = @import("chess.zig");
 const move_gen_lookup = @import("move_gen_lookup.zig");
 
-//////// Piece moves ////////
+//////// Legal moves ////////
+
+const MoveLimiter = struct {
+    king_block: BB,
+    check_mask: BB,
+    pin_ortho: BB,
+    pin_diag: BB,
+};
+
+fn calculateMoveLimiters(chessboard: *const board.Board, comptime flags: board.BoardFlags) MoveLimiter {
+    var ret = MoveLimiter{
+        .king_block = 0,
+        .check_mask = bitboard.all,
+        .pin_ortho = 0,
+        .pin_diag = 0,
+    };
+
+    const ally_mask = switch (flags.side) {
+        .White => chessboard.white,
+        .Black => chessboard.black,
+    };
+    const enemy_mask = switch (flags.side) {
+        .White => chessboard.black,
+        .Black => chessboard.white,
+    };
+
+    const occupied = chessboard.black | chessboard.white;
+    const enemy_hv_sliders = enemy_mask & (chessboard.rook | chessboard.queen);
+    const enemy_diag_sliders = enemy_mask & (chessboard.bishop | chessboard.queen);
+    const enemy_knights = enemy_mask & chessboard.knight;
+    const enemy_pawns = enemy_mask & chessboard.pawn;
+    const ally_king = ally_mask & chessboard.king;
+    const occ_without_king = occupied ^ ally_king;
+    const ally_king_ind = bitboard.indFromPlacebit(ally_king).ind;
+
+    // King not included in the slider move calculation
+    // If it was, the king could block vision to the square behind it (away from the sliding attacker)
+    // and this would be incorrectly registered as a valid move
+    const hv_attacks = hvSliderMovesParallel(enemy_hv_sliders, occ_without_king);
+    const diag_attacks = diagSliderMovesParallel(enemy_diag_sliders, occ_without_king);
+    const knight_attacks = knightMovesParallel(enemy_knights);
+    const pawn_attacks = pawnAttacks(enemy_pawns, flags.side.oppositeSide());
+
+    ret.king_block = hv_attacks | diag_attacks | knight_attacks | pawn_attacks;
+
+    const king_ortho = move_gen_lookup.sliderFiles[ally_king_ind] | move_gen_lookup.sliderRanks[ally_king_ind];
+    const king_diags = move_gen_lookup.sliderDiagonals[ally_king_ind] | move_gen_lookup.sliderAntidiagonals[ally_king_ind];
+    const ortho_poss_checkers = enemy_hv_sliders & king_ortho;
+    const diags_poss_checkers = enemy_diag_sliders & king_diags;
+    // Enemy ortho-sliding pieces and the squares they see
+    // Including the pieces themselves (they will be included in the check mask)
+    const ortho_checkable_attacks = hvSliderMovesParallel(ortho_poss_checkers, occupied) | ortho_poss_checkers;
+    const diags_checkable_attacks = diagSliderMovesParallel(diags_poss_checkers, occupied) | diags_poss_checkers;
+    // Squares seen by ally king
+    const ortho_king_seen = hvSliderMovesSingle(ally_king, occupied);
+    const diags_king_seen = diagSliderMovesSingle(ally_king, occupied);
+    // Intersection of squares seen by king and squares seen by enemy sliders
+    // is either empty (>1 piece in between)
+    // 1 bit (single pinned piece in between)
+    // >1 bit (no pinned piece; direct check)
+    // Ignoring non-enemy-sliding pieces in between 
+    const possible_ortho_pins = occupied & ~enemy_hv_sliders;
+    const possible_diag_pins = occupied & ~enemy_diag_sliders;
+    // Possibly better way of doing this: king_seen & enemy_sliders gives checkers, pathBetween gets bitboard
+    // Would remove second set of parallel slider checks
+    const ortho_checks = (ortho_king_seen & ~possible_ortho_pins) & (ortho_checkable_attacks & ~possible_ortho_pins);
+    const diag_checks = (diags_king_seen & possible_diag_pins) & (diags_checkable_attacks & possible_diag_pins);
+    const knight_checks = knightMovesSingle(ally_king) & enemy_knights;
+    const pawn_checks = pawnAttacks(ally_king, flags.side) & enemy_pawns;
+
+    // Unfortunately, idk any way to turn only 0s to filled bitboards branchlessly.
+    // Tried: wraparound subtract 1, non-wraparound add 1
+    // subtract with overflow bit, multiply overflow bit with filled bitboard
+    // subtract with error check, catch error => filled bitboard
+    // All have branches and this approach has the simplest asm
+    if (ortho_checks != 0) {
+        ret.check_mask = ortho_checks;
+    } else if (diag_checks != 0) {
+        // else if because impossible to have ortho and diag checks simultaneously
+        // eliminates a branch when there is an ortho check
+        ret.check_mask = diag_checks;
+    } 
+    // Double check possible with a pawn and an ortho, but not with any other piece type
+    if (pawn_checks != 0) {
+        ret.check_mask &= pawn_checks;
+    }
+    if (knight_checks != 0) {
+        ret.check_mask &= knight_checks;
+    }
+
+    const ortho_skewers = hvSliderSkewerSingle(ally_king, ortho_king_seen & ally_mask, occupied);
+    const diag_skewers = diagSliderSkewerSingle(ally_king, diags_king_seen & ally_mask, occupied);
+
+    // By this calculation, pin masks will include any check masks
+    // but that shouldn't matter because pinned pieces cannot move to other parts of the same pin
+    if (ortho_skewers & enemy_hv_sliders != 0) {
+        ret.pin_ortho = ortho_skewers;
+    }
+    if (diag_skewers & enemy_diag_sliders != 0) {
+        ret.pin_diag = diag_skewers;
+    }
+
+    // TODO: En Passant pawn pin check
+
+    return ret;
+}
+
+/// Calculates and returns skewering rays of an orthogonally-sliding piece
+/// Skewering ray: squares seen by a piece either directly or through one piece
+fn hvSliderSkewerSingle(piece: bitboard.Placebit, blockers: BB, occupied: BB) BB {
+    const occ_without_attacked = occupied ^ blockers;
+    return hvSliderMovesSingle(piece, occ_without_attacked);
+}
+
+/// Calculates and returns skewering rays of an diagonally-sliding piece
+/// Skewering ray: squares seen by a piece either directly or through one piece
+fn diagSliderSkewerSingle(piece: bitboard.Placebit, blockers: BB, occupied: BB) BB {
+    const occ_without_attacked = occupied ^ blockers;
+    return diagSliderMovesSingle(piece, occ_without_attacked);
+}
+
+//////// Pseudolegal piece moves ////////
 
 /// Calculates single forward pawn moves
 fn pawnPushes(pawns: BB, comptime side: chess.Side) BB {
@@ -47,7 +168,7 @@ fn knightMovesParallel(knights: BB) BB {
 
 /// Calculates moves of a single knight
 /// Useful for finding moves
-fn knightMovesIndividual(knight: bitboard.Placebit) BB {
+fn knightMovesSingle(knight: bitboard.Placebit) BB {
     const knight_ind = bitboard.indFromPlacebit(knight);
     return move_gen_lookup.knightMoveLookup[knight_ind.ind];
 }
@@ -55,7 +176,7 @@ fn knightMovesIndividual(knight: bitboard.Placebit) BB {
 /// Calculates the valid moves of a single orthogonally-sliding piece
 /// Treats all occupied squares as attackable, whether ally or enemy
 /// bitwise & with enemy mask to get attacked squares
-fn hvSliderMovesIndividual(piece: bitboard.Placebit, occupied: BB) BB {
+fn hvSliderMovesSingle(piece: bitboard.Placebit, occupied: BB) BB {
     const piece_ind = bitboard.indFromPlacebit(piece).ind;
 
     const file = move_gen_lookup.sliderFiles[piece_ind];
@@ -78,7 +199,7 @@ fn hvSliderMovesIndividual(piece: bitboard.Placebit, occupied: BB) BB {
 /// Calculates the valid moves of a single diagonally-sliding piece
 /// Treats all occupied squares as attackable, whether ally or enemy
 /// bitwise & with enemy mask to get attacked squares
-fn diagSliderMovesIndividual(piece: bitboard.Placebit, occupied: BB) BB {
+fn diagSliderMovesSingle(piece: bitboard.Placebit, occupied: BB) BB {
     const piece_ind = bitboard.indFromPlacebit(piece);
 
     const diag = move_gen_lookup.sliderDiagonals[piece_ind];
@@ -96,36 +217,6 @@ fn diagSliderMovesIndividual(piece: bitboard.Placebit, occupied: BB) BB {
     const neg_antidiag_ray = @bitReverse(rev_antidiag_o ^ (rev_antidiag_o -% (2 *% rev_piece))) & antidiag;
 
     return pos_diag_ray | neg_diag_ray | pos_antidiag_ray | neg_antidiag_ray;
-}
-
-/// Calculates moves of all sliding pieces
-/// Useful for finding attacked squares or moves
-/// movable_mask determines behaviour
-/// enemy or empty: attacked squares
-/// empty: movable, non-attacked squares
-/// bitboard.all: full ranges of motion (skewers, pins, etc.)
-fn sliderMovesOld(hv_sliders: BB, diag_sliders: BB, movable_mask: BB) BB {
-    // North, South, East, West
-    var hv_iter = [_]BB{hv_sliders} ** 4;
-    // NE, SE, SW, NW
-    var diag_iter = [_]BB{diag_sliders} ** 4;
-    var move_mask: BB = 0;
-    inline for (0..8) |_| {
-        hv_iter[0] = bitboard.shiftNorth(hv_iter[0], 1) & movable_mask;
-        hv_iter[1] = bitboard.shiftSouth(hv_iter[1], 1) & movable_mask;
-        hv_iter[2] = bitboard.shiftEast(hv_iter[2], 1) & movable_mask;
-        hv_iter[3] = bitboard.shiftWest(hv_iter[3], 1) & movable_mask;
-
-        diag_iter[0] = bitboard.shiftNE(diag_iter[0], 1) & movable_mask;
-        diag_iter[1] = bitboard.shiftSE(diag_iter[1], 1) & movable_mask;
-        diag_iter[2] = bitboard.shiftSW(diag_iter[2], 1) & movable_mask;
-        diag_iter[3] = bitboard.shiftNW(diag_iter[3], 1) & movable_mask;
-
-        move_mask |= hv_iter[0] | hv_iter[1] | hv_iter[2] | hv_iter[3] |
-            diag_iter[0] | diag_iter[1] | diag_iter[2] | diag_iter[3];
-    }
-
-    return move_mask;
 }
 
 /// Kogge-Stone algorithm for flood fill
@@ -264,7 +355,7 @@ test "knight behaviour equality" {
     for (0..64) |i| {
         const pos_ind = chess.PosInd{ .ind = @truncate(i) };
         const pos = bitboard.placebitFromInd(pos_ind);
-        try testing.expect(knightMovesIndividual(pos) == knightMovesParallel(pos));
+        try testing.expect(knightMovesSingle(pos) == knightMovesParallel(pos));
     }
 }
 
@@ -272,37 +363,37 @@ test "knight moves" {
     // Unobstructed
     const e4 = bitboard.rank4 & bitboard.fileE;
     const e4_moves = (bitboard.rank2 & (bitboard.fileD | bitboard.fileF)) | (bitboard.rank6 & (bitboard.fileD | bitboard.fileF)) | (bitboard.rank3 & (bitboard.fileC | bitboard.fileG)) | (bitboard.rank5 & (bitboard.fileC | bitboard.fileG));
-    try testing.expectEqual(knightMovesIndividual(e4), e4_moves);
+    try testing.expectEqual(knightMovesSingle(e4), e4_moves);
 
     // Corners
     const a1 = bitboard.rank1 & bitboard.fileA;
     const a1_moves = (bitboard.rank2 & bitboard.fileC) | (bitboard.rank3 & bitboard.fileB);
-    try testing.expectEqual(knightMovesIndividual(a1), a1_moves);
+    try testing.expectEqual(knightMovesSingle(a1), a1_moves);
 
     const a8 = bitboard.rank8 & bitboard.fileA;
     const a8_moves = (bitboard.rank7 & bitboard.fileC) | (bitboard.rank6 & bitboard.fileB);
-    try testing.expectEqual(knightMovesIndividual(a8), a8_moves);
+    try testing.expectEqual(knightMovesSingle(a8), a8_moves);
 
     const h1 = bitboard.rank1 & bitboard.fileH;
     const h1_moves = (bitboard.rank2 & bitboard.fileF) | (bitboard.rank3 & bitboard.fileG);
-    try testing.expectEqual(knightMovesIndividual(h1), h1_moves);
+    try testing.expectEqual(knightMovesSingle(h1), h1_moves);
 
     const h8 = bitboard.rank8 & bitboard.fileH;
     const h8_moves = (bitboard.rank7 & bitboard.fileF) | (bitboard.rank6 & bitboard.fileG);
-    try testing.expectEqual(knightMovesIndividual(h8), h8_moves);
+    try testing.expectEqual(knightMovesSingle(h8), h8_moves);
 }
 
 test "lateral slider moves" {
     // Unobstructed movement
     const a1 = bitboard.rank1 & bitboard.fileA;
     const a1_moves = (bitboard.rank1 | bitboard.fileA) ^ a1;
-    const found_a1_moves = hvSliderMovesIndividual(a1, a1);
+    const found_a1_moves = hvSliderMovesSingle(a1, a1);
     // bitboard.print(found_a1_moves);
     try testing.expectEqual(found_a1_moves, a1_moves);
 
     const e4 = bitboard.rank4 & bitboard.fileE;
     const e4_moves = (bitboard.rank4 | bitboard.fileE) ^ e4;
-    const found_e4_moves = hvSliderMovesIndividual(e4, e4);
+    const found_e4_moves = hvSliderMovesSingle(e4, e4);
     // bitboard.print(found_e4_moves);
     try testing.expectEqual(found_e4_moves, e4_moves);
 }
