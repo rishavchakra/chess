@@ -6,6 +6,14 @@ const std = @import("std");
 pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 pub const test_fen = "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2";
 
+pub const BoardFlags = packed struct {
+    side: chess.Side = .White,
+    has_enpassant: bool = false,
+    w_castle_l: bool = true,
+    w_castle_r: bool = true,
+    b_castle_l: bool = true,
+    b_castle_r: bool = true,
+};
 pub const Board = struct {
     const Self = @This();
     const Bitboard = bitboard.Bitboard;
