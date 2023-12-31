@@ -358,75 +358,127 @@ pub const sliderDiagonals: [64]u64 = [_]u64{
 };
 
 pub const sliderAntidiagonals: [64]u64 = [_]u64{
-    bitboard.diag7,
-    bitboard.diag6,
-    bitboard.diag5,
-    bitboard.diag4,
-    bitboard.diag3,
-    bitboard.diag2,
-    bitboard.diag1,
-    bitboard.diag0,
+    bitboard.antidiag7,
+    bitboard.antidiag6,
+    bitboard.antidiag5,
+    bitboard.antidiag4,
+    bitboard.antidiag3,
+    bitboard.antidiag2,
+    bitboard.antidiag1,
+    bitboard.antidiag0,
 
-    bitboard.diag6,
-    bitboard.diag5,
-    bitboard.diag4,
-    bitboard.diag3,
-    bitboard.diag2,
-    bitboard.diag1,
-    bitboard.diag0,
-    bitboard.diag15,
+    bitboard.antidiag6,
+    bitboard.antidiag5,
+    bitboard.antidiag4,
+    bitboard.antidiag3,
+    bitboard.antidiag2,
+    bitboard.antidiag1,
+    bitboard.antidiag0,
+    bitboard.antidiag15,
 
-    bitboard.diag5,
-    bitboard.diag4,
-    bitboard.diag3,
-    bitboard.diag2,
-    bitboard.diag1,
-    bitboard.diag0,
-    bitboard.diag15,
-    bitboard.diag14,
+    bitboard.antidiag5,
+    bitboard.antidiag4,
+    bitboard.antidiag3,
+    bitboard.antidiag2,
+    bitboard.antidiag1,
+    bitboard.antidiag0,
+    bitboard.antidiag15,
+    bitboard.antidiag14,
 
-    bitboard.diag4,
-    bitboard.diag3,
-    bitboard.diag2,
-    bitboard.diag1,
-    bitboard.diag0,
-    bitboard.diag15,
-    bitboard.diag14,
-    bitboard.diag13,
+    bitboard.antidiag4,
+    bitboard.antidiag3,
+    bitboard.antidiag2,
+    bitboard.antidiag1,
+    bitboard.antidiag0,
+    bitboard.antidiag15,
+    bitboard.antidiag14,
+    bitboard.antidiag13,
 
-    bitboard.diag3,
-    bitboard.diag2,
-    bitboard.diag1,
-    bitboard.diag0,
-    bitboard.diag15,
-    bitboard.diag14,
-    bitboard.diag13,
-    bitboard.diag12,
+    bitboard.antidiag3,
+    bitboard.antidiag2,
+    bitboard.antidiag1,
+    bitboard.antidiag0,
+    bitboard.antidiag15,
+    bitboard.antidiag14,
+    bitboard.antidiag13,
+    bitboard.antidiag12,
 
-    bitboard.diag2,
-    bitboard.diag1,
-    bitboard.diag0,
-    bitboard.diag15,
-    bitboard.diag14,
-    bitboard.diag13,
-    bitboard.diag12,
-    bitboard.diag11,
+    bitboard.antidiag2,
+    bitboard.antidiag1,
+    bitboard.antidiag0,
+    bitboard.antidiag15,
+    bitboard.antidiag14,
+    bitboard.antidiag13,
+    bitboard.antidiag12,
+    bitboard.antidiag11,
 
-    bitboard.diag1,
-    bitboard.diag0,
-    bitboard.diag15,
-    bitboard.diag14,
-    bitboard.diag13,
-    bitboard.diag12,
-    bitboard.diag11,
-    bitboard.diag10,
+    bitboard.antidiag1,
+    bitboard.antidiag0,
+    bitboard.antidiag15,
+    bitboard.antidiag14,
+    bitboard.antidiag13,
+    bitboard.antidiag12,
+    bitboard.antidiag11,
+    bitboard.antidiag10,
 
-    bitboard.diag0,
-    bitboard.diag15,
-    bitboard.diag14,
-    bitboard.diag13,
-    bitboard.diag12,
-    bitboard.diag11,
-    bitboard.diag10,
-    bitboard.diag9,
+    bitboard.antidiag0,
+    bitboard.antidiag15,
+    bitboard.antidiag14,
+    bitboard.antidiag13,
+    bitboard.antidiag12,
+    bitboard.antidiag11,
+    bitboard.antidiag10,
+    bitboard.antidiag9,
 };
+
+const pathsBetweenArr: [4096]bitboard.Bitboard = {
+    var paths: [4096]bitboard.Bitboard = [_]bitboard.Bitboard{0} ** 4096;
+
+    for (0..64) |from| {
+        for (0..64) |to| {
+            const from_bb = bitboard.placebitFromInd(from);
+            const to_bb = bitboard.placebitFromInd(to);
+
+            const pos_ray = to > from;
+
+            const file = sliderFiles[from];
+            const rank = sliderRanks[from];
+            const diag = sliderDiagonals[from];
+            const antidiag = sliderAntidiagonals[from];
+
+            const direction = direction: {
+                if (file & to_bb != 0) {
+                    break :direction file;
+                } else if (rank & to_bb != 0) {
+                    break :direction rank;
+                } else if (diag & to_bb != 0) {
+                    break :direction diag;
+                } else if (antidiag & to_bb != 0) {
+                    break :direction antidiag;
+                } else {
+                    // No path between these pieces
+                    break :direction 0;
+                }
+            };
+            const occ = (from_bb | to_bb) & direction;
+
+            if (pos_ray) {
+                const ray = (occ ^ (occ -% (2 *% from_bb))) & direction;
+                paths[from * 64 + to] = ray;
+            } else {
+                const from_r = @bitReverse(from);
+                const occ_r = @bitReverse(occ);
+                const ray = @bitReverse(occ_r ^ (occ_r -% (2 *% from_r))) & direction;
+                paths[from * 64 + to] = ray;
+            }
+        }
+        break paths;
+    }
+};
+
+pub fn pathBetween(from: bitboard.Bitboard, to: bitboard.Bitboard) bitboard.Bitboard {
+    const from_ind = bitboard.indFromPlacebit(from);
+    const to_ind = bitboard.indFromPlacebit(to);
+
+    return pathsBetweenArr[from_ind.ind * 64 + to_ind.ind];
+}

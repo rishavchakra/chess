@@ -200,7 +200,7 @@ fn hvSliderMovesSingle(piece: bitboard.Placebit, occupied: BB) BB {
 /// Treats all occupied squares as attackable, whether ally or enemy
 /// bitwise & with enemy mask to get attacked squares
 fn diagSliderMovesSingle(piece: bitboard.Placebit, occupied: BB) BB {
-    const piece_ind = bitboard.indFromPlacebit(piece);
+    const piece_ind = bitboard.indFromPlacebit(piece).ind;
 
     const diag = move_gen_lookup.sliderDiagonals[piece_ind];
     const antidiag = move_gen_lookup.sliderAntidiagonals[piece_ind];
@@ -313,14 +313,14 @@ fn kingMoves(king: bitboard.Placebit) BB {
 ////////////////////////////////
 // Testing
 ////////////////////////////////
-test "pawn pushes" {
+test pawnPushes {
     try testing.expectEqual(pawnPushes(bitboard.rank2, .White), bitboard.rank3);
     try testing.expectEqual(pawnPushes(bitboard.rank2 & bitboard.fileB, .White), bitboard.rank3 & bitboard.fileB);
     try testing.expectEqual(pawnPushes(bitboard.rank4, .Black), bitboard.rank3);
     try testing.expectEqual(pawnPushes(bitboard.rank7, .Black), bitboard.rank6);
 }
 
-test "pawn double pushes" {
+test pawnDoublePushes {
     try testing.expectEqual(pawnDoublePushes(bitboard.rank3, .White), bitboard.rank4);
     try testing.expectEqual(pawnDoublePushes(bitboard.rank4, .White), 0);
     try testing.expectEqual(pawnDoublePushes(bitboard.rank3 & bitboard.fileB, .White), bitboard.rank4 & bitboard.fileB);
@@ -330,7 +330,7 @@ test "pawn double pushes" {
     try testing.expectEqual(pawnDoublePushes(bitboard.rank6 & bitboard.fileB, .Black), bitboard.rank5 & bitboard.fileB);
 }
 
-test "pawn attacks" {
+test pawnAttacks {
     // All pawns on rank 2 can attack all of rank 3
     try testing.expectEqual(pawnAttacks(bitboard.rank2, .White), bitboard.rank3);
 
@@ -396,4 +396,15 @@ test "lateral slider moves" {
     const found_e4_moves = hvSliderMovesSingle(e4, e4);
     // bitboard.print(found_e4_moves);
     try testing.expectEqual(found_e4_moves, e4_moves);
+}
+
+test calculateMoveLimiters {
+    const board1 = board.Board.initFromFen("7k/8/2r3b1/5R2/2B2b2/5r2/rRK4r/7r w - - 0 1");
+    const king1 = board1.king & board1.white;
+    const limiters1 = calculateMoveLimiters(&board1, .{ .side = .White });
+    const expected_pin_ortho = hvSliderMovesSingle(king1, board1.black);
+    const expected_check_mask = 0xf800;
+    try testing.expectEqual(limiters1.check_mask, expected_check_mask);
+    try testing.expect(limiters1.pin_ortho == expected_pin_ortho);
+    // try testing.expectEqual(0x)
 }
