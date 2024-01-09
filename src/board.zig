@@ -7,13 +7,116 @@ pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 pub const test_fen = "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2";
 
 pub const BoardFlags = packed struct {
+    const Self = @This();
+
     side: chess.Side = .White,
     has_enpassant: bool = false,
     w_castle_l: bool = true,
     w_castle_r: bool = true,
     b_castle_l: bool = true,
     b_castle_r: bool = true,
+
+    pub fn makeMove(self: Self, move: chess.Move) BoardFlags {
+        return switch (move.flags) {
+            .KingMove => self.makeMoveKing(),
+            .RookMove => {
+                switch (move.pos_from.ind) {
+                    0, 56 => return self.makeMoveRookQueenside(),
+                    7, 63 => return self.makeMoveRookKingside(),
+                    else => return self.makeMoveQuiet(),
+                }
+            },
+            .DoublePawnPush => self.makeMoveDoublePawnPush(),
+            else => self.makeMoveQuiet(),
+        };
+    }
+
+    fn makeMoveQuiet(self: BoardFlags) BoardFlags {
+        return BoardFlags{
+            .side = self.side.oppositeSide(),
+            .has_enpassant = false,
+            .w_castle_l = self.w_castle_l,
+            .w_castle_r = self.w_castle_r,
+            .b_castle_l = self.b_castle_l,
+            .b_castle_r = self.b_castle_r,
+        };
+    }
+
+    fn makeMoveKing(self: BoardFlags) BoardFlags {
+        return switch (self.side) {
+            .White => BoardFlags{
+                .side = self.side.oppositeSide(),
+                .has_enpassant = false,
+                .w_castle_l = false,
+                .w_castle_r = false,
+                .b_castle_l = self.b_castle_l,
+                .b_castle_r = self.b_castle_r,
+            },
+            .Black => BoardFlags{
+                .side = self.side.oppositeSide(),
+                .has_enpassant = false,
+                .w_castle_l = self.w_castle_l,
+                .w_castle_r = self.w_castle_r,
+                .b_castle_l = false,
+                .b_castle_r = false,
+            },
+        };
+    }
+
+    fn makeMoveRookQueenside(self: BoardFlags) BoardFlags {
+        return switch (self.side) {
+            .White => BoardFlags{
+                .side = self.side.oppositeSide(),
+                .has_enpassant = false,
+                .w_castle_l = false,
+                .w_castle_r = self.w_castle_r,
+                .b_castle_l = self.b_castle_l,
+                .b_castle_r = self.b_castle_r,
+            },
+            .Black => BoardFlags{
+                .side = self.side.oppositeSide(),
+                .has_enpassant = false,
+                .w_castle_l = self.w_castle_l,
+                .w_castle_r = self.w_castle_r,
+                .b_castle_l = false,
+                .b_castle_r = self.b_castle_r,
+            },
+        };
+    }
+
+    fn makeMoveRookKingside(self: BoardFlags) BoardFlags {
+        return switch (self.side) {
+            .White => BoardFlags{
+                .side = self.side.oppositeSide(),
+                .has_enpassant = false,
+                .w_castle_l = self.w_castle_l,
+                .w_castle_r = false,
+                .b_castle_l = self.b_castle_l,
+                .b_castle_r = self.b_castle_r,
+            },
+            .Black => BoardFlags{
+                .side = self.side.oppositeSide(),
+                .has_enpassant = false,
+                .w_castle_l = self.w_castle_l,
+                .w_castle_r = self.w_castle_r,
+                .b_castle_l = self.b_castle_l,
+                .b_castle_r = false,
+            },
+        };
+    }
+
+    fn makeMoveDoublePawnPush(self: BoardFlags) BoardFlags {
+        return BoardFlags{
+            .side = self.side.oppositeSide(),
+            .has_enpassant = true,
+            .w_castle_l = self.w_castle_l,
+            .w_castle_r = self.w_castle_r,
+            .b_castle_l = self.b_castle_l,
+            .b_castle_r = self.b_castle_r,
+        };
+    }
 };
+
 pub const Board = struct {
     const Self = @This();
     const Bitboard = bitboard.Bitboard;
@@ -140,7 +243,7 @@ pub const Board = struct {
     /// Assumes that the move is valid
     /// Be careful with castling especially;
     /// if not a valid castle, will spawn a new rook
-    pub fn makeMove(self: *Self, move: chess.Move) void {
+    pub fn makeMove(self: *Self, flags: BoardFlags, move: chess.Move) void {
         const from_bit = bitboard.placebitFromInd(move.pos_from);
         const to_bit = bitboard.placebitFromInd(move.pos_to);
 
@@ -172,7 +275,7 @@ pub const Board = struct {
             self.king ^= from_bit;
             self.king |= to_bit;
         }
-        switch (self.side) {
+        switch (flags.side) {
             .White => {
                 self.white ^= from_bit;
                 self.white |= to_bit;
@@ -185,7 +288,7 @@ pub const Board = struct {
 
         switch (move.flags) {
             .CaptureEP => {
-                switch (self.side) {
+                switch (flags.side) {
                     .White => {
                         const ep_pawn_bit = bitboard.shiftSouth(to_bit, 1);
                         self.black ^= ep_pawn_bit;
@@ -254,8 +357,6 @@ pub const Board = struct {
             },
             else => {},
         }
-
-        self.side = self.side.oppositeSide();
     }
 
     // Queenside castling
