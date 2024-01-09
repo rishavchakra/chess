@@ -31,6 +31,10 @@ fn calculateMoveLimiters(chessboard: *const board.Board, comptime flags: board.B
         .White => chessboard.black,
         .Black => chessboard.white,
     };
+    const ep_pawn_mask = switch (flags.side) {
+        .White => bitboard.shiftNorth(chessboard.ep, 1),
+        .Black => bitboard.shiftSouth(chessboard.ep, 1),
+    };
 
     const occupied = chessboard.black | chessboard.white;
     const enemy_hv_sliders = enemy_mask & (chessboard.rook | chessboard.queen);
@@ -108,7 +112,20 @@ fn calculateMoveLimiters(chessboard: *const board.Board, comptime flags: board.B
         ret.pin_diag = diag_skewers;
     }
 
-    // TODO: En Passant pawn pin check
+    // TODO: This branch is COLD and should not be checked every single move generation
+    // maybe: overarching switch statement for board flags
+    // @setCold compiler hint currently not applicable to non-function scope branches
+    if (flags.has_enpassant) {
+        const king_rank = move_gen_lookup.sliderRanks[ally_king_ind];
+        const ep_takers_pos = ally_mask & chessboard.pawn & (bitboard.shiftEast(ep_pawn_mask, 1) | bitboard.shiftWest(ep_pawn_mask, 1));
+        const occ_without_ep = occupied ^ ep_pawn_mask; // Should mask out single EP pawn
+        const ep_king_seen = hvSliderMovesSingle(ally_king, occ_without_ep) & king_rank;
+        const ep_king_skewer = hvSliderSkewerSingle(ally_king, ep_king_seen & ep_takers_pos, occ_without_ep);
+        // If there's an HV attacker preventing taking EP
+        if (ep_king_skewer & enemy_hv_sliders != 0) {
+            ret.pin_ortho |= ep_king_skewer;
+        }
+    }
 
     return ret;
 }

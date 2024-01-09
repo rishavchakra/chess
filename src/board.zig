@@ -119,16 +119,17 @@ pub const BoardFlags = packed struct {
 
 pub const Board = struct {
     const Self = @This();
-    const Bitboard = bitboard.Bitboard;
+    const BB = bitboard.Bitboard;
 
-    white: Bitboard,
-    black: Bitboard,
-    pawn: Bitboard,
-    bishop: Bitboard,
-    knight: Bitboard,
-    rook: Bitboard,
-    queen: Bitboard,
-    king: Bitboard,
+    white: BB,
+    black: BB,
+    pawn: BB,
+    bishop: BB,
+    knight: BB,
+    rook: BB,
+    queen: BB,
+    king: BB,
+    ep: BB,
 
     // non-piece board state
     side: chess.Side,
@@ -141,19 +142,21 @@ pub const Board = struct {
     pub fn initFromFen(fen_str: []const u8) Self {
         var pos: chess.PosRankFile = chess.PosRankFile.init(7, 0);
 
-        var white: Bitboard = 0;
-        var black: Bitboard = 0;
-        var pawn: Bitboard = 0;
-        var bishop: Bitboard = 0;
-        var knight: Bitboard = 0;
-        var rook: Bitboard = 0;
-        var queen: Bitboard = 0;
-        var king: Bitboard = 0;
+        var white: BB = 0;
+        var black: BB = 0;
+        var pawn: BB = 0;
+        var bishop: BB = 0;
+        var knight: BB = 0;
+        var rook: BB = 0;
+        var queen: BB = 0;
+        var king: BB = 0;
         var side: chess.Side = undefined;
         var w_castle_l: u1 = 0;
         var w_castle_r: u1 = 0;
         var b_castle_l: u1 = 0;
         var b_castle_r: u1 = 0;
+        var ep_pos: chess.PosRankFile = chess.PosRankFile.init(1, 0);
+        var has_ep: bool = true;
 
         const FenStage = enum {
             Pieces,
@@ -180,7 +183,7 @@ pub const Board = struct {
                     }
                     // const char_side: chess.Side = if (fen_char < 0x60) .White else .Black;
                     // const piece_char = if (fen_char > 0x60) fen_char - 0x20 else fen_char;
-                    const piece_bit: Bitboard = @as(u64, 1) << pos.toInd().ind;
+                    const piece_bit: BB = @as(u64, 1) << pos.toInd().ind;
                     switch (fen_char) {
                         0x41...0x5A => white |= piece_bit,
                         0x61...0x7A => black |= piece_bit,
@@ -215,10 +218,24 @@ pub const Board = struct {
                         else => unreachable,
                     }
                 },
-                .EnPassant => break,
+                .EnPassant => {
+                    switch (fen_char) {
+                        '-' => {
+                            has_ep = false;
+                            stage = .Halfmove;
+                        },
+                        'a'...'h' => ep_pos.rank = @truncate(fen_char - 'a'),
+                        '1'...'8' => ep_pos.file = @truncate(fen_char - '1'),
+                        ' ' => stage = .Halfmove,
+                        else => unreachable,
+                    }
+                },
+                .Halfmove => break,
                 else => unreachable,
             }
         }
+
+        const ep = if (has_ep) bitboard.placebitFromInd(chess.PosRankFile.toInd()) else 0;
 
         return Self{
             .white = white,
@@ -229,6 +246,7 @@ pub const Board = struct {
             .rook = rook,
             .queen = queen,
             .king = king,
+            .ep = ep,
 
             .side = side,
             .has_enpassant = 0,
@@ -318,7 +336,7 @@ pub const Board = struct {
                 self.queen |= to_bit;
             },
             .CastleKing => {
-                switch (self.side) {
+                switch (flags.side) {
                     .White => {
                         // Only one king, of course
                         self.king = bitboard.rank1 & bitboard.fileG;
@@ -338,7 +356,7 @@ pub const Board = struct {
                 }
             },
             .CastleQueen => {
-                switch (self.side) {
+                switch (flags.side) {
                     .White => {
                         self.king = bitboard.rank1 & bitboard.fileC;
                         self.rook ^= bitboard.rank1 & bitboard.fileA;
@@ -360,7 +378,7 @@ pub const Board = struct {
     }
 
     // Queenside castling
-    fn canCastleLeft(self: *const Self, occupied: Bitboard, attacked: Bitboard) bool {
+    fn canCastleLeft(self: *const Self, occupied: BB, attacked: BB) bool {
         switch (self.side) {
             .White => {
                 // TODO: simplify to single statement
@@ -393,7 +411,7 @@ pub const Board = struct {
     }
 
     // Kingside castling
-    fn canCastleRight(self: *const Self, occupied: Bitboard, attacked: Bitboard) bool {
+    fn canCastleRight(self: *const Self, occupied: BB, attacked: BB) bool {
         switch (self.side) {
             .White => {
                 // TODO: simplify to single statement
