@@ -2,6 +2,7 @@ const chess = @import("chess.zig");
 const bitboard = @import("bitboard.zig");
 const move_gen = @import("move_gen.zig");
 const std = @import("std");
+const testing = std.testing;
 
 pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 pub const test_fen = "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2";
@@ -129,7 +130,7 @@ pub const Board = struct {
     rook: BB,
     queen: BB,
     king: BB,
-    ep: BB,
+    ep: BB, // The additional square behind a pushed pawn, not the pawn itself
 
     // non-piece board state
     side: chess.Side,
@@ -155,7 +156,7 @@ pub const Board = struct {
         var w_castle_r: u1 = 0;
         var b_castle_l: u1 = 0;
         var b_castle_r: u1 = 0;
-        var ep_pos: chess.PosRankFile = chess.PosRankFile.init(1, 0);
+        var ep_pos: chess.PosRankFile = chess.PosRankFile.init(0, 0);
         var has_ep: bool = true;
 
         const FenStage = enum {
@@ -175,7 +176,8 @@ pub const Board = struct {
                         pos.file = 0;
                         continue;
                     } else if (fen_char == ' ') {
-                        break;
+                        stage = .Side;
+                        continue;
                     }
                     if (fen_char > 47 and fen_char < 57) {
                         pos.file +%= @truncate(fen_char - 0x30);
@@ -210,7 +212,8 @@ pub const Board = struct {
                 },
                 .Castling => {
                     switch (fen_char) {
-                        '-', ' ' => stage = .EnPassant,
+                        '-' => {},
+                        ' ' => stage = .EnPassant,
                         'K' => w_castle_r = 1,
                         'Q' => w_castle_l = 1,
                         'k' => b_castle_r = 1,
@@ -224,8 +227,9 @@ pub const Board = struct {
                             has_ep = false;
                             stage = .Halfmove;
                         },
-                        'a'...'h' => ep_pos.rank = @truncate(fen_char - 'a'),
-                        '1'...'8' => ep_pos.file = @truncate(fen_char - '1'),
+                        'a'...'h' => ep_pos.file = @as(u3, @truncate(fen_char - 'a')),
+                        // 3 and 6 are only possible en passant ranks
+                        '3', '6' => ep_pos.rank = @as(u3, @truncate(fen_char - '1')),
                         ' ' => stage = .Halfmove,
                         else => unreachable,
                     }
@@ -235,7 +239,7 @@ pub const Board = struct {
             }
         }
 
-        const ep = if (has_ep) bitboard.placebitFromInd(chess.PosRankFile.toInd()) else 0;
+        const ep = if (has_ep) bitboard.placebitFromInd(chess.PosRankFile.toInd(ep_pos)) else 0;
 
         return Self{
             .white = white,
@@ -249,7 +253,7 @@ pub const Board = struct {
             .ep = ep,
 
             .side = side,
-            .has_enpassant = 0,
+            .has_enpassant = @intFromBool(has_ep),
             .w_castle_l = w_castle_l,
             .w_castle_r = w_castle_r,
             .b_castle_l = b_castle_l,
@@ -443,3 +447,9 @@ pub const Board = struct {
         }
     }
 };
+
+test "FEN en passant" {
+    const board = Board.initFromFen("8/8/8/1K1pP1r1/8/8/6k1/8 w - d6 0 1");
+    try testing.expectEqual(board.has_enpassant, 1);
+    try testing.expectEqual(board.ep, bitboard.rank6 & bitboard.fileD);
+}
