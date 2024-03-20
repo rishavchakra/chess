@@ -1,4 +1,13 @@
-pub const Side = enum(u1) { White, Black };
+// White = 0
+// Black = 1
+pub const Side = enum(u1) {
+    White,
+    Black,
+
+    pub fn oppositeSide(self: Side) Side {
+        return @enumFromInt(1 - @intFromEnum(self));
+    }
+};
 
 pub const PosRankFile = struct {
     rank: u3,
@@ -33,7 +42,8 @@ pub const PosInd = struct {
     }
 };
 
-// 16-bit move data
+// 16-bit move data if using 'packed struct'
+// 24-bit move data (3 bytes) if just using 'struct'
 pub const Move = struct {
     pos_from: PosInd, // 6 bits
     pos_to: PosInd, // 6 bits
@@ -46,31 +56,25 @@ pub const Move = struct {
             .flags = move_type,
         };
     }
-
-    pub fn isPromotion(self: Move) bool {
-        return (self.flags & 0b0100) != 0;
-    }
-
-    pub fn isCapture(self: Move) bool {
-        return (self.flags & 0b1000) != 0;
-    }
 };
 
 pub const MoveType = enum(u4) {
-    Quiet = 0b0000, // no captures, no checks
-    DoublePawnPush = 0b0001, // pushing a pawn two spaces
-    CastleKing = 0b0010, // castle kingside (right side)
-    CastleQueen = 0b0011, // castle queenside (left side)
-    Capture = 0b0100, // Move captures a piece
-    CaptureEP = 0b0101, // Pawn captures a pawn via En Passant
-    PromoBishop = 0b1000, // Pawn promoted to Bishop
-    PromoKnight = 0b1001, // Pawn promoted to Knight
-    PromoRook = 0b1010, // Pawn promoted to Rook
-    PromoQueen = 0b1011, // Pawn promoted to Queen
-    CapturePromoBishop = 0b1100, // Pawn moves forward via capture, promoted to Bishop
-    CapturePromoKnight = 0b1101, // Pawn moves forward via capture, promoted to Knight
-    CapturePromoRook = 0b1110, // Pawn moves forward via capture, promoted to Rook
-    CapturePromoQueen = 0b1111, // Pawn moves forward via capture, promoted to Queen
+    Quiet, // no captures, no checks
+    DoublePawnPush, // pushing a pawn two spaces
+    KingMove, // king moves, no longer able to castle
+    RookMove, // rook moves, no longer able to castle on corresponding side
+    CastleKing, // castle kingside (right side)
+    CastleQueen, // castle queenside (left side)
+    Capture, // Move captures a piece
+    CaptureEP, // Pawn captures a pawn via En Passant
+    PromoBishop, // Pawn promoted to Bishop
+    PromoKnight, // Pawn promoted to Knight
+    PromoRook, // Pawn promoted to Rook
+    PromoQueen, // Pawn promoted to Queen
+    CapturePromoBishop, // Pawn moves forward via capture, promoted to Bishop
+    CapturePromoKnight, // Pawn moves forward via capture, promoted to Knight
+    CapturePromoRook, // Pawn moves forward via capture, promoted to Rook
+    CapturePromoQueen, // Pawn moves forward via capture, promoted to Queen
 };
 
 pub const Piece = struct {
@@ -108,7 +112,7 @@ pub const Piece = struct {
     }
 };
 
-pub const PieceType = enum {
+pub const PieceType = enum(u3) {
     None,
     Pawn,
     Bishop,
@@ -117,6 +121,7 @@ pub const PieceType = enum {
     Queen,
     King,
 
+    // Each piece's in-game point value
     pub fn value(self: PieceType) u8 {
         switch (self) {
             .None => 0,

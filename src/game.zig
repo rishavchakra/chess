@@ -9,6 +9,7 @@ pub const Game = struct {
     const Self = @This();
 
     chessboard: board.Board,
+    board_flags: board.BoardFlags,
     client_white: *clients.GuiClient,
     client_black: *clients.GuiClient,
     renderer: *const render.RenderState,
@@ -16,6 +17,7 @@ pub const Game = struct {
     pub fn init(renderer: *const render.RenderState) Self {
         return Self{
             .chessboard = board.Board.initFromFen(board.test_fen),
+            .board_flags = .{},
             .client_white = undefined,
             .client_black = undefined,
             .renderer = renderer,
@@ -39,9 +41,11 @@ pub const Game = struct {
     }
 
     pub fn makeMove(self: *Self, move: chess.Move) void {
-        self.chessboard.makeMove(move);
+        self.chessboard.makeMove(self.board_flags, move);
+        self.board_flags = self.board_flags.makeMove(move);
         self.renderer.updatePiecePositions(self.chessboard);
-        switch (self.chessboard.side) {
+        // Ask for a move from the next player client
+        switch (self.board_flags.side) {
             .White => {
                 self.client_white.requestMove();
             },
